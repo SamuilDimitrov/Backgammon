@@ -51,7 +51,6 @@ void setup() {
   digitalWrite(33, LOW);
   configureCamera();
   digitalWrite(33, HIGH);
-  //Serial.println("Camera ok");
   delay(1000);
   led();
 }
@@ -61,6 +60,7 @@ void loop() {
     command = Serial.read(); 
   }
   if(command == '0'){
+    command = 'q';
     led();
     int a = sendPhoto();
     if(!a){
