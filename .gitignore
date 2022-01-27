@@ -60,6 +60,7 @@ media
 
 # Distribution / packaging
 .Python
+uploads/
 build/
 develop-eggs/
 dist/

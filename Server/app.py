@@ -1,5 +1,7 @@
 import os
+from turtle import position
 import uuid
+import random
 
 from flask import Flask, request, render_template, redirect, url_for, flash
 from flask_login import login_user, login_required, current_user, logout_user, LoginManager
@@ -38,6 +40,84 @@ def load_user(user_id):
 @login_manager.unauthorized_handler
 def unauthorized():
     return redirect(url_for('login'))
+
+# ------------------------------------------------------------------------------
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template("error_404.html"), 400
+
+# ------------------------------------------------------------------------------
+
+# Row dice
+def rowDice():
+    dice = [random.randint(1, 6) for i in range(2)]
+    return dice
+
+# decide who goes first
+def pickStartPlayer():
+    diceOnline = rowDice()
+    diceIRL = rowDice()
+    if diceOnline[0] + diceOnline[1] > diceIRL[0] + diceIRL[1]:
+        playerOnTurn = "pWhite"
+    elif diceOnline[0] + diceOnline[1] < diceIRL[0] + diceIRL[1]:
+        playerOnTurn = "pBlack"
+    else:
+        playerOnTurn = pickStartPlayer()
+    return playerOnTurn
+
+# ------------------------------------------------------------------------------
+
+class BoardPosition:
+    def __init__(self, player=None, checkers = 0):
+        self.player = player
+        self.checkers  = checkers
+
+    def place(self, placing_player):
+        if self.player == placing_player:
+            self.checkers += 1
+        elif self.player is None:
+            self.player = placing_player
+            self.checkers = 1
+        else:
+            self.player = placing_player
+            return self.player
+        return 0
+
+    def removePool(self):
+        if self.checkers > 0:
+            self.checkers -= 1
+            if self.checkers == 0:
+                self.player = None
+
+class Game:
+    def __init__(self, OnlinePlayer = "pWhite", IRLPlayer = "pBlack"):
+        self.OnlinePlayer = OnlinePlayer
+        self.IRLPlayer = IRLPlayer
+        self.playerOnTurn = pickStartPlayer()
+        self.board = [BoardPosition() for i in range(24)]    # the 24 points on the board
+        self.barPosition = {"pWhite": 0, "pBlack": 0}        # the plase wghere the checkers that have been hit go
+        self.bearingOffStage = {"pWhite": False, "pBlack": False}
+        self.bearOffCheckers = {"pWhite": 0, "pBlack": 0}    # the number of checkers that have been beared off
+        self.dice = [0, 0]
+        self.board[0] = BoardPosition('pBlack', 2)
+        self.board[5] = BoardPosition('pWhite', 5)
+        self.board[7] = BoardPosition('pWhite', 3)
+        self.board[11] = BoardPosition('pBlack', 5)
+        self.board[12] = BoardPosition('pWhite', 5)
+        self.board[16] = BoardPosition('pBlack', 3)
+        self.board[18] = BoardPosition('pBlack', 5)
+        self.board[23] = BoardPosition('pWhite', 2)
+
+    # Hit a checker
+    def hitChecker(self, playerWhoHasBeenHit):
+       self.barPosition[playerWhoHasBeenHit] += 1
+
+    def printBoard(self):
+        for i in range(24):
+            print(f'{i} - {self.board[i].checkers}')
+
+games = {}
 
 # ------------------------------------------------------------------------------
 
@@ -162,6 +242,39 @@ def uploadPhoto():
     return "OK"
 
 # ------------------------------------------------------------------------------
+
+@app.route('/createGame', methods=['GET', 'POST'])
+@login_required
+def createGame():
+    if request.method == "GET":
+        print ("here")
+        game_id = str(uuid.uuid4())
+        games[game_id] = Game()
+    return redirect(url_for('showGame', id = game_id))
+
+@app.route('/showGame/<id>', methods=['GET', 'POST'])
+@login_required
+def showGame(id):
+    if request.method == "GET":
+        if id in games: 
+            b = games[id].board
+            return render_template("showBOard.html", board = b, id = id)
+        else:
+            return render_template("gameNotFound.html")
+
+@app.route('/ajax', methods = ['POST'])
+def ajax_request():
+    old_pos_string = request.form['old_pos']
+    new_pos_string = request.form['new_pos']
+    game_id = request.form['game_id']
+    old_pos = int(old_pos_string[6:8])
+    new_pos = int(new_pos_string[6:8])
+    
+    games[game_id].board[old_pos].removePool()
+    games[game_id].board[new_pos].place(games[game_id].playerOnTurn)
+
+    allowed = True
+    return {'allowed':allowed}
 
 @app.route('/', methods=['GET', 'POST'])
 def index():

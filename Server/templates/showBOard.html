@@ -1,0 +1,190 @@
+{% extends "base.html" %} {% block title %} Show Board {% endblock %} {% block
+head %}
+<style>
+  table,
+  th,
+  td {
+    border: 1px solid black;
+  }
+  table {
+    counter-reset: section;
+  }
+  .count:before {
+    width: 100%;
+    height: 100%;
+    counter-increment: section;
+    content: counter(section);
+  }
+  .flex-container {
+    display: flex;
+  }
+  .row {
+    justify-content: space-between;
+    height: 100%;
+    flex-direction: row;
+    width: 80%;
+  }
+  .bottomHalfs {
+    margin: 3px;
+    margin-bottom: 20px;
+  }
+  .Board {
+    background-image: url(../static/images/backgammon-Board.jpg);
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    align-items: center;
+    flex-direction: column;
+    width: 800px;
+    height: 593px;
+  }
+  
+  .point {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 50px;
+    height: 100%;
+    border: 1px solid #a70000;
+  }
+  .top {
+    margin: 3px;
+    margin-top: 20px;
+  }
+  .bottom{
+    justify-content: flex-end;
+  }
+  
+  .checker {
+    width: 40px;
+    height: 40px;
+    margin: 1%;
+  }
+  .Black {
+    background-color: black;
+  }
+  .White {
+    background-color: wheat;
+  }
+</style>
+{% endblock %} 
+
+{% block body %}
+<p id="room_id" name="{{id}}" hidden></p>
+<div class="row justify-content-center mt-2">
+    <div class="col-md-4">
+        <div class="flex-container Board">
+            <div class="flex-container row">
+                <div class="flex-container top">
+                {% for point in range(11, 5, -1) %}
+                    <div name="no_name" id="point_{{point}}" class="point" ondrop="drop(event)" ondragover="allowDrop(event)">
+                        {% for j in range(board[point].checkers) %}
+                            {% if board[point].player =="pWhite" %}
+                            <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="White checker" draggable="true" ondragstart="drag(event)"></div>
+                            {% else %}
+                            <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true" ondragstart="drag(event)"></div>
+                            {% endif %} 
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+                </div>
+                <div class="flex-container top">
+                    {% for point in range(5, -1, -1) %}
+                    <div name="no_name" id="point_{{point}}" class="point" ondrop="drop(event)" ondragover="allowDrop(event)">
+                        {% for j in range(board[point].checkers) %}
+                        {% if board[point].player =="pWhite" %}
+                        <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="White checker" draggable="true"
+                            ondragstart="drag(event)"></div>
+                        {% else %}
+                        <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true"
+                            ondragstart="drag(event)"></div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="flex-container row">
+                <div class="flex-container bottomHalfs">
+                    {% for point in range(12, 18) %}
+                    <div name="no_name" id="point_{{point}}" class="point bottom" ondrop="drop(event)" ondragover="allowDrop(event)">
+                        {% for j in range(board[point].checkers) %}
+                        {% if board[point].player =="pWhite" %}
+                        <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="White checker" draggable="true"
+                            ondragstart="drag(event)"></div>
+                        {% else %}
+                        <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true"
+                            ondragstart="drag(event)"></div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="flex-container bottomHalfs">
+                    {% for point in range(18, 24) %}
+                    <div name="no_name" id="point_{{point}}" class="point bottom" ondrop="drop(event)" ondragover="allowDrop(event)">
+                        {% for j in range(board[point].checkers) %}
+                        {% if board[point].player =="pWhite" %}
+                        <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="White checker" draggable="true"
+                            ondragstart="drag(event)"></div>
+                        {% else %}
+                        <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true"
+                            ondragstart="drag(event)"></div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var game_id;
+    var old_pos;
+    var target
+    var new_pos;
+    var turn = 0;
+
+function drag(ev) {
+    old_pos = ev.target.parentNode.id;
+    target = ev.target.id
+    ev.dataTransfer.setData("text", target);
+}
+    
+function allowDrop(ev) {
+    ev.preventDefault();
+}
+    
+function drop(ev) {
+    game_id = $( "#room_id" ).attr("name");
+    ev.preventDefault();
+    console.log(ev);
+    var image = ev.dataTransfer.getData("text");
+    let element = ev.target;
+    var al = false;
+    new_pos = ev.target.id;
+    if (new_pos.includes("text")) {
+        console.log("here")
+        new_pos = ev.target.parentNode.id;
+    }
+    $.ajax({
+        url: "/ajax",
+        method: "POST",
+        data: {
+          game_id: game_id,
+          old_pos: old_pos,
+          new_pos: new_pos,
+        },
+        async: true,
+    }).done(function (data) {
+        al = data.allowed;
+        console.log(al)
+        if (al) {
+            ev.target.appendChild(document.getElementById(image));
+        }
+    });
+}
+</script>
+
+{% endblock %}
