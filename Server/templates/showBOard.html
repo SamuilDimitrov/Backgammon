@@ -136,6 +136,20 @@ head %}
                 </div>
             </div>
         </div>
+        <div>
+            {% if dice[0] == 0 and dice[1] == 0 %}<button class="dice" onclick="diceRow()">Roll the dice</button>{% endif %}
+            {% if dice[0] == 0 %} 
+                <img id="dice_1">
+            {% else %}
+                <img id="dice_1" src="../static/images/dices/k1_{{ dice[0] }}.png">
+            {% endif %}
+            {% if dice[1] == 0 %} 
+                <img id="dice_2">
+            {% else %}
+                <img id="dice_1" src="../static/images/dices/k2_{{ dice[1] }}.png">
+            {% endif %}
+        </div>
+
     </div>
 </div>
 
@@ -165,11 +179,10 @@ function drop(ev) {
     var al = false;
     new_pos = ev.target.id;
     if (new_pos.includes("text")) {
-        console.log("here")
         new_pos = ev.target.parentNode.id;
     }
     $.ajax({
-        url: "/ajax",
+        url: "/ajaxMove",
         method: "POST",
         data: {
           game_id: game_id,
@@ -179,12 +192,35 @@ function drop(ev) {
         async: true,
     }).done(function (data) {
         al = data.allowed;
-        console.log(al)
+        hitt = data.hitt;
+        
         if (al) {
+            if (hitt) {
+                ev.target.innerHTML = '';
+            }
             ev.target.appendChild(document.getElementById(image));
+            
         }
     });
 }
+
+function diceRow(){
+    $.ajax({
+        url: "/ajaxDiceRow/{{ id }}",
+        method: "GET",
+        success: function (data) {
+           showDices(data);
+        }
+    });
+    return true;
+};
+
+function showDices(data) {
+    dice = data.dice;
+    (dice[0] > 0) ? document.getElementById('dice_1').src = '/static/images/dices/k1_' + dice[0] + '.png' : document.getElementById('dice_1').innerHTML = '';
+    (dice[1] > 0) ? document.getElementById('dice_2').src = '/static/images/dices/k2_' + dice[1] + '.png' : document.getElementById('dice_2').innerHTML = '';
+    console.log(dice)
+};
 </script>
 
 {% endblock %}

@@ -75,14 +75,22 @@ class BoardPosition:
 
     def place(self, placing_player):
         if self.player == placing_player:
+            print("here1")
             self.checkers += 1
         elif self.player is None:
+            print("here2")
             self.player = placing_player
             self.checkers = 1
         else:
-            self.player = placing_player
-            return self.player
-        return 0
+            print("here3")
+            if self.checkers > 1:
+                print("here4")
+                return -1
+            else:
+                print("here5")
+                self.player = placing_player
+                return self.player
+        return None
 
     def removePool(self):
         if self.checkers > 0:
@@ -109,13 +117,22 @@ class Game:
         self.board[18] = BoardPosition('pBlack', 5)
         self.board[23] = BoardPosition('pWhite', 2)
 
-    # Hit a checker
-    def hitChecker(self, playerWhoHasBeenHit):
-       self.barPosition[playerWhoHasBeenHit] += 1
-
     def printBoard(self):
         for i in range(24):
             print(f'{i} - {self.board[i].checkers}')
+    
+    # move checker
+    def moveChecker(self, old_position, new_position):
+        result = self.board[new_position].place(self.board[old_position].player)
+        if result is None:
+            self.board[old_position].removePool()
+        elif result == -1:
+            return -1
+        else:
+            self.board[old_position].removePool()
+            self.barPosition[result] += 1
+            return 1
+        return 0
 
 games = {}
 
@@ -247,7 +264,6 @@ def uploadPhoto():
 @login_required
 def createGame():
     if request.method == "GET":
-        print ("here")
         game_id = str(uuid.uuid4())
         games[game_id] = Game()
     return redirect(url_for('showGame', id = game_id))
@@ -258,23 +274,37 @@ def showGame(id):
     if request.method == "GET":
         if id in games: 
             b = games[id].board
-            return render_template("showBOard.html", board = b, id = id)
+            dice = games[id].dice
+            return render_template("showBOard.html", board = b, id = id, dice = dice)
         else:
             return render_template("gameNotFound.html")
 
-@app.route('/ajax', methods = ['POST'])
+@app.route('/ajaxDiceRow/<game_id>', methods = ['GET'])
+def ajaxDiceRow(game_id):
+    print(game_id)
+    games[game_id].dice = rowDice()
+    return {'dice' : games[game_id].dice}
+
+@app.route('/ajaxMove', methods = ['POST'])
 def ajax_request():
     old_pos_string = request.form['old_pos']
     new_pos_string = request.form['new_pos']
     game_id = request.form['game_id']
     old_pos = int(old_pos_string[6:8])
     new_pos = int(new_pos_string[6:8])
-    
-    games[game_id].board[old_pos].removePool()
-    games[game_id].board[new_pos].place(games[game_id].playerOnTurn)
 
-    allowed = True
-    return {'allowed':allowed}
+    hitt = False
+
+    result = games[game_id].moveChecker(old_pos,new_pos)
+
+    if result == -1:
+        allowed = False
+    else:
+        allowed = True
+        if result == 1:
+            hitt = True
+
+    return {'allowed':allowed, 'hitt':hitt}
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
