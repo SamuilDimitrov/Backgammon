@@ -95,6 +95,11 @@ head %}
 <p id="room_id" name="{{id}}" hidden></p>
 <div class="row justify-content-center mt-2">
     <div class="col-md-4">
+        {% if OnlinePlayer == "pBlack" %}
+            <h2>You are playing as Black</h2>
+        {% else %}
+            <h2>You are playing as White</h2>
+        {% endif %}
         <div class="flex-container Board">
             <div class="myRow">
                 <div id="bHitt" class="sidePoint">
@@ -108,13 +113,13 @@ head %}
                         <div name="no_name" id="point_{{point}}" class="point" ondrop="drop(event)" ondragover="allowDrop(event)">
                             {% for j in range(board[point].checkers) %}
                                 {% if board[point].player =="pWhite" %}
-                                    {% if board[point].player == playerOnTurn %}
+                                    {% if board[point].player == OnlinePlayer %}
                                         <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="true" ondragstart="drag(event)"></div>
                                     {% else %}
                                         <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="false" ondragstart="dragErr(event)"></div>
                                     {% endif %}
                                 {% else %}
-                                    {% if board[point].player == playerOnTurn %}
+                                    {% if board[point].player == OnlinePlayer %}
                                         <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true" ondragstart="drag(event)"></div>
                                     {% else %}
                                         <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="false" ondragstart="dragErr(event)"></div>
@@ -129,13 +134,13 @@ head %}
                         <div name="no_name" id="point_{{point}}" class="point" ondrop="drop(event)" ondragover="allowDrop(event)">
                             {% for j in range(board[point].checkers) %}
                                 {% if board[point].player =="pWhite" %}
-                                    {% if board[point].player == playerOnTurn %}
+                                    {% if board[point].player == OnlinePlayer %}
                                         <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="true" ondragstart="drag(event)"></div>
                                     {% else %}
                                         <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="false" ondragstart="dragErr(event)"></div>
                                     {% endif %}
                                 {% else %}
-                                    {% if board[point].player == playerOnTurn %}
+                                    {% if board[point].player == OnlinePlayer %}
                                         <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true" ondragstart="drag(event)"></div>
                                     {% else %}
                                         <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="false" ondragstart="dragErr(event)"></div>
@@ -164,13 +169,13 @@ head %}
                         <div name="no_name" id="point_{{point}}" class="point bottom" ondrop="drop(event)" ondragover="allowDrop(event)">
                             {% for j in range(board[point].checkers) %}
                                 {% if board[point].player =="pWhite" %}
-                                    {% if board[point].player == playerOnTurn %}
+                                    {% if board[point].player == OnlinePlayer %}
                                         <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="true" ondragstart="drag(event)"></div>
                                     {% else %}
                                         <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="false" ondragstart="dragErr(event)"></div>
                                     {% endif %}
                                 {% else %}
-                                    {% if board[point].player == playerOnTurn %}
+                                    {% if board[point].player == OnlinePlayer %}
                                         <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true" ondragstart="drag(event)"></div>
                                     {% else %}
                                         <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="false" ondragstart="dragErr(event)"></div>
@@ -185,13 +190,13 @@ head %}
                         <div name="no_name" id="point_{{point}}" class="point bottom" ondrop="drop(event)" ondragover="allowDrop(event)">
                             {% for j in range(board[point].checkers) %}
                                 {% if board[point].player =="pWhite" %}
-                                    {% if board[point].player == playerOnTurn %}
+                                    {% if board[point].player == OnlinePlayer %}
                                         <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="true" ondragstart="drag(event)"></div>
                                     {% else %}
                                         <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="false" ondragstart="dragErr(event)"></div>
                                     {% endif %}
                                 {% else %}
-                                    {% if board[point].player == playerOnTurn %}
+                                    {% if board[point].player == OnlinePlayer %}
                                         <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true" ondragstart="drag(event)"></div>
                                     {% else %}
                                         <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="false" ondragstart="dragErr(event)"></div>
@@ -319,13 +324,12 @@ function showDices(data) {
     turnPossible = data.turnPossible;
     document.getElementById('dice_1').src = (dice[0] > 0) ? '/static/images/dices/k1_' + dice[0] + '.png' : document.getElementById('dice_1').innerHTML = '';
     document.getElementById('dice_2').src = (dice[1] > 0) ? '/static/images/dices/k2_' + dice[1] + '.png' : document.getElementById('dice_2').innerHTML = '';
-    document.getElementById('diceButton').style.visibility = (dice[1] == 0 && dice[0] == 0) ? "visible" : "hidden";
+    document.getElementById('diceButton').style.visibility = ("{{OnlinePlayer}}" == data.currPlayer && (dice[1] == 0 && dice[0] == 0)) ? "visible" : "hidden";
     console.log(dice);
     if (turnPossible == false){
         setTimeout(function () {
             document.getElementById('dice_1').src = document.getElementById('dice_1').innerHTML = '';
             document.getElementById('dice_2').src = document.getElementById('dice_2').innerHTML = '';
-            document.getElementById('diceButton').style.visibility = "visible";
             changePlayer(data);
         }, 5000);
     }
@@ -334,18 +338,18 @@ function showDices(data) {
 function changePlayer(data){
     currPlayer = data.currPlayer;
     document.getElementById("currPlayer").innerHTML = "Player on turn:" + currPlayer;
-    NodeList.prototype.forEach = Array.prototype.forEach;
-    if (currPlayer == "pWhite"){
-        document.getElementById('wHitt').querySelectorAll('div.White').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
-        document.getElementById('bHitt').querySelectorAll('div.Black').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
-        document.querySelectorAll('div.point>div.White').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
-        document.querySelectorAll('div.point>div.Black').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
-    }else{
-        document.getElementById('bHitt').querySelectorAll('div.Black').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
-        document.getElementById('wHitt').querySelectorAll('div.White').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
-        document.querySelectorAll('div.point>div.Black').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
-        document.querySelectorAll('div.point>div.White').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
-    }
+    // NodeList.prototype.forEach = Array.prototype.forEach;
+    // if (currPlayer == "pWhite"){
+    //     document.getElementById('wHitt').querySelectorAll('div.White').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
+    //     document.getElementById('bHitt').querySelectorAll('div.Black').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
+    //     document.querySelectorAll('div.point>div.White').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
+    //     document.querySelectorAll('div.point>div.Black').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
+    // }else{
+    //     document.getElementById('bHitt').querySelectorAll('div.Black').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
+    //     document.getElementById('wHitt').querySelectorAll('div.White').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
+    //     document.querySelectorAll('div.point>div.Black').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
+    //     document.querySelectorAll('div.point>div.White').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
+    // }
 }
 
 </script>

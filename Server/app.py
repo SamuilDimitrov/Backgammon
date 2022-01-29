@@ -378,8 +378,8 @@ def showGame(id):
             playerOnTurn = games[id].playerOnTurn
             bearOffCheckers = games[id].bearOffCheckers
             barPosition = games[id].barPosition
-
-            return render_template("showBOard.html", board = b, id = id, dice = dice, playerOnTurn=playerOnTurn, bearOffCheckers = bearOffCheckers, barPosition = barPosition)
+            OnlinePlayer = games[id].OnlinePlayer
+            return render_template("showBOard.html", board = b, id = id, dice = dice, playerOnTurn=playerOnTurn, bearOffCheckers = bearOffCheckers, barPosition = barPosition, OnlinePlayer = OnlinePlayer)
         else:
             return render_template("gameNotFound.html")
 
