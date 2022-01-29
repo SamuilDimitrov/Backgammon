@@ -18,16 +18,6 @@ head %}
   .flex-container {
     display: flex;
   }
-  .row {
-    justify-content: space-between;
-    height: 100%;
-    flex-direction: row;
-    width: 80%;
-  }
-  .bottomHalfs {
-    margin: 3px;
-    margin-bottom: 20px;
-  }
   .Board {
     background-image: url(../static/images/backgammon-Board.jpg);
     background-repeat: no-repeat;
@@ -37,7 +27,31 @@ head %}
     width: 800px;
     height: 593px;
   }
-  
+  .centerPart {
+    justify-content: space-between;
+    height: 100%;
+    flex-direction: row;
+    width: 80%;
+  }
+  .bottomHalfs {
+    margin: 3px;
+    margin-bottom: 20px;
+  }
+  .myRow {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    }
+  .sidePoint{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 50px;
+    height: 75%;
+    margin-top: 3%;
+    border: 1px solid #a70000;
+  }
   .point {
     display: flex;
     flex-direction: column;
@@ -54,7 +68,7 @@ head %}
     justify-content: flex-end;
   }
   
-  .checker {
+  .checker { 
     width: 40px;
     height: 40px;
     margin: 1%;
@@ -65,6 +79,15 @@ head %}
   .White {
     background-color: wheat;
   }
+  #bHitt, #wHitt{
+    margin-right: 2%;
+  }
+  #bOut, #wOut{
+    margin-left: 2%;
+  }
+  #bOut, #wHitt{
+    margin-top: 6%;
+  }
 </style>
 {% endblock %} 
 
@@ -73,71 +96,126 @@ head %}
 <div class="row justify-content-center mt-2">
     <div class="col-md-4">
         <div class="flex-container Board">
-            <div class="flex-container row">
-                <div class="flex-container top">
-                {% for point in range(11, 5, -1) %}
-                    <div name="no_name" id="point_{{point}}" class="point" ondrop="drop(event)" ondragover="allowDrop(event)">
-                        {% for j in range(board[point].checkers) %}
-                            {% if board[point].player =="pWhite" %}
-                            <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="White checker" draggable="true" ondragstart="drag(event)"></div>
-                            {% else %}
-                            <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true" ondragstart="drag(event)"></div>
-                            {% endif %} 
-                        {% endfor %}
-                    </div>
-                {% endfor %}
+            <div class="myRow">
+                <div id="bHitt" class="sidePoint">
+                    {% for i in range(barPosition["pBlack"]) %}
+                        <div name="checker_black_hitt_{{i}}" id="checker_black_hitt_{{i}}" class="Black checker" draggable="true" ondragstart="drag(event)"></div>
+                    {% endfor %}
                 </div>
-                <div class="flex-container top">
-                    {% for point in range(5, -1, -1) %}
-                    <div name="no_name" id="point_{{point}}" class="point" ondrop="drop(event)" ondragover="allowDrop(event)">
-                        {% for j in range(board[point].checkers) %}
-                        {% if board[point].player =="pWhite" %}
-                        <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="White checker" draggable="true"
-                            ondragstart="drag(event)"></div>
-                        {% else %}
-                        <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true"
-                            ondragstart="drag(event)"></div>
-                        {% endif %}
+                <div class="flex-container centerPart">
+                    <div class="flex-container top">
+                    {% for point in range(11, 5, -1) %}
+                        <div name="no_name" id="point_{{point}}" class="point" ondrop="drop(event)" ondragover="allowDrop(event)">
+                            {% for j in range(board[point].checkers) %}
+                                {% if board[point].player =="pWhite" %}
+                                    {% if board[point].player == playerOnTurn %}
+                                        <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="true" ondragstart="drag(event)"></div>
+                                    {% else %}
+                                        <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="false" ondragstart="dragErr(event)"></div>
+                                    {% endif %}
+                                {% else %}
+                                    {% if board[point].player == playerOnTurn %}
+                                        <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true" ondragstart="drag(event)"></div>
+                                    {% else %}
+                                        <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="false" ondragstart="dragErr(event)"></div>
+                                    {% endif %}
+                                {% endif %} 
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                    </div>
+                    <div class="flex-container top">
+                        {% for point in range(5, -1, -1) %}
+                        <div name="no_name" id="point_{{point}}" class="point" ondrop="drop(event)" ondragover="allowDrop(event)">
+                            {% for j in range(board[point].checkers) %}
+                                {% if board[point].player =="pWhite" %}
+                                    {% if board[point].player == playerOnTurn %}
+                                        <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="true" ondragstart="drag(event)"></div>
+                                    {% else %}
+                                        <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="false" ondragstart="dragErr(event)"></div>
+                                    {% endif %}
+                                {% else %}
+                                    {% if board[point].player == playerOnTurn %}
+                                        <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true" ondragstart="drag(event)"></div>
+                                    {% else %}
+                                        <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="false" ondragstart="dragErr(event)"></div>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
                         {% endfor %}
                     </div>
+                </div>
+                <div id="wOut" class="sidePoint">
+                    {% for i in range(bearOffCheckers["pWhite"]) %}
+                        <div name="checker_out_{{i}}" id="checker_out_{{i}}" class="White checker" draggable="false" ondragstart="dragErr(event)"></div>
                     {% endfor %}
                 </div>
             </div>
-            <div class="flex-container row">
-                <div class="flex-container bottomHalfs">
-                    {% for point in range(12, 18) %}
-                    <div name="no_name" id="point_{{point}}" class="point bottom" ondrop="drop(event)" ondragover="allowDrop(event)">
-                        {% for j in range(board[point].checkers) %}
-                        {% if board[point].player =="pWhite" %}
-                        <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="White checker" draggable="true"
-                            ondragstart="drag(event)"></div>
-                        {% else %}
-                        <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true"
-                            ondragstart="drag(event)"></div>
-                        {% endif %}
-                        {% endfor %}
-                    </div>
+            <div class="myRow">
+                <div id="wHitt" class="sidePoint">
+                    {% for i in range(barPosition["pWhite"]) %}
+                    <div name="checker_white_hitt_{{i}}" id="checker_white_hitt_{{i}}" class="White checker" draggable="true" ondragstart="drag(event)"></div>
                     {% endfor %}
                 </div>
-                <div class="flex-container bottomHalfs">
-                    {% for point in range(18, 24) %}
-                    <div name="no_name" id="point_{{point}}" class="point bottom" ondrop="drop(event)" ondragover="allowDrop(event)">
-                        {% for j in range(board[point].checkers) %}
-                        {% if board[point].player =="pWhite" %}
-                        <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="White checker" draggable="true"
-                            ondragstart="drag(event)"></div>
-                        {% else %}
-                        <div name="checker_{{point}}_{{j}}" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true"
-                            ondragstart="drag(event)"></div>
-                        {% endif %}
+                <div class="flex-container centerPart">
+                    <div class="flex-container bottomHalfs">
+                        {% for point in range(12, 18) %}
+                        <div name="no_name" id="point_{{point}}" class="point bottom" ondrop="drop(event)" ondragover="allowDrop(event)">
+                            {% for j in range(board[point].checkers) %}
+                                {% if board[point].player =="pWhite" %}
+                                    {% if board[point].player == playerOnTurn %}
+                                        <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="true" ondragstart="drag(event)"></div>
+                                    {% else %}
+                                        <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="false" ondragstart="dragErr(event)"></div>
+                                    {% endif %}
+                                {% else %}
+                                    {% if board[point].player == playerOnTurn %}
+                                        <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true" ondragstart="drag(event)"></div>
+                                    {% else %}
+                                        <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="false" ondragstart="dragErr(event)"></div>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
                         {% endfor %}
                     </div>
+                    <div class="flex-container bottomHalfs">
+                        {% for point in range(18, 24) %}
+                        <div name="no_name" id="point_{{point}}" class="point bottom" ondrop="drop(event)" ondragover="allowDrop(event)">
+                            {% for j in range(board[point].checkers) %}
+                                {% if board[point].player =="pWhite" %}
+                                    {% if board[point].player == playerOnTurn %}
+                                        <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="true" ondragstart="drag(event)"></div>
+                                    {% else %}
+                                        <div name="checker_{{point}}_{{j}}_white" id="checker_{{point}}_{{j}}" class="White checker" draggable="false" ondragstart="dragErr(event)"></div>
+                                    {% endif %}
+                                {% else %}
+                                    {% if board[point].player == playerOnTurn %}
+                                        <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="true" ondragstart="drag(event)"></div>
+                                    {% else %}
+                                        <div name="checker_{{point}}_{{j}}_black" id="checker_{{point}}_{{j}}" class="Black checker" draggable="false" ondragstart="dragErr(event)"></div>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div id="bOut" class="sidePoint">
+                    {% for i in range(bearOffCheckers["pBlack"]) %}
+                    <div name="checker_out_{{i}}" id="checker_out_{{i}}" class="Black checker" draggable="false" ondragstart="dragErr(event)"></div>
                     {% endfor %}
                 </div>
             </div>
         </div>
         <div>
-            {% if dice[0] == 0 and dice[1] == 0 %}<button class="dice" onclick="diceRow()">Roll the dice</button>{% endif %}
+            <div id="currPlayer">Player on turn: {{playerOnTurn}}</div>
+            <div>
+                {% if dice[0] == 0 and dice[1] == 0 %}
+                    <button class="dice" id ="diceButton" onclick="diceRow()">Roll the dice</button>
+                {% endif %}
+            </div>
             {% if dice[0] == 0 %} 
                 <img id="dice_1">
             {% else %}
@@ -158,12 +236,17 @@ head %}
     var old_pos;
     var target
     var new_pos;
-    var turn = 0;
+    var currPlayer;
 
 function drag(ev) {
     old_pos = ev.target.parentNode.id;
-    target = ev.target.id
+    target = ev.target.id;
     ev.dataTransfer.setData("text", target);
+}
+
+function dragErr(ev) {
+    old_pos = null;
+    target = null;
 }
     
 function allowDrop(ev) {
@@ -178,6 +261,9 @@ function drop(ev) {
     let element = ev.target;
     var al = false;
     new_pos = ev.target.id;
+    if (old_pos == null){
+        return -1
+    }
     if (new_pos.includes("text")) {
         new_pos = ev.target.parentNode.id;
     }
@@ -192,15 +278,17 @@ function drop(ev) {
         async: true,
     }).done(function (data) {
         al = data.allowed;
-        hitt = data.hitt;
-        
+        currPlayer = data.currPlayer;
         if (al) {
+            hitt = data.hitt;
             if (hitt) {
                 ev.target.innerHTML = '';
             }
             ev.target.appendChild(document.getElementById(image));
-            
+            showDices(data);
+            changePlayer(data);
         }
+        
     });
 }
 
@@ -217,10 +305,24 @@ function diceRow(){
 
 function showDices(data) {
     dice = data.dice;
-    (dice[0] > 0) ? document.getElementById('dice_1').src = '/static/images/dices/k1_' + dice[0] + '.png' : document.getElementById('dice_1').innerHTML = '';
-    (dice[1] > 0) ? document.getElementById('dice_2').src = '/static/images/dices/k2_' + dice[1] + '.png' : document.getElementById('dice_2').innerHTML = '';
-    console.log(dice)
+    document.getElementById('dice_1').src = (dice[0] > 0) ? '/static/images/dices/k1_' + dice[0] + '.png' : document.getElementById('dice_1').innerHTML = '';
+    document.getElementById('dice_2').src = (dice[1] > 0) ? '/static/images/dices/k2_' + dice[1] + '.png' : document.getElementById('dice_1').innerHTML = '';
+    document.getElementById('diceButton').style.visibility = (dice[1] == 0 && dice[0] == 0) ? "visible" : "hidden";
+    console.log(dice);
 };
+
+function changePlayer(data){
+    currPlayer = data.currPlayer;
+    document.getElementById("currPlayer").innerHTML = "Player on turn:" + currPlayer;
+    if (currPlayer == "pWhite"){
+        document.querySelectorAll('div.point>div.White').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
+        document.querySelectorAll('div.point>div.Black').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
+    }else{
+        document.querySelectorAll('div.point>div.Black').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
+        document.querySelectorAll('div.point>div.White').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
+    }
+}
+
 </script>
 
 {% endblock %}

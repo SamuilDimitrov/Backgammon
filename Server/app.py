@@ -73,23 +73,23 @@ class BoardPosition:
         self.player = player
         self.checkers  = checkers
 
+    def checkIfMoveisPossible(self, placing_player):
+        if self.checkers > 1 and self.player != placing_player:
+            return -1
+        else:
+            return 0
+
     def place(self, placing_player):
         if self.player == placing_player:
-            print("here1")
             self.checkers += 1
         elif self.player is None:
-            print("here2")
             self.player = placing_player
             self.checkers = 1
         else:
-            print("here3")
-            if self.checkers > 1:
-                print("here4")
-                return -1
-            else:
-                print("here5")
+            if self.checkIfMoveisPossible(placing_player) == 0:
+                hittPlayer = self.player
                 self.player = placing_player
-                return self.player
+                return hittPlayer
         return None
 
     def removePool(self):
@@ -108,6 +108,7 @@ class Game:
         self.bearingOffStage = {"pWhite": False, "pBlack": False}
         self.bearOffCheckers = {"pWhite": 0, "pBlack": 0}    # the number of checkers that have been beared off
         self.dice = [0, 0]
+        self.doubles = False
         self.board[0] = BoardPosition('pBlack', 2)
         self.board[5] = BoardPosition('pWhite', 5)
         self.board[7] = BoardPosition('pWhite', 3)
@@ -117,23 +118,63 @@ class Game:
         self.board[18] = BoardPosition('pBlack', 5)
         self.board[23] = BoardPosition('pWhite', 2)
 
-    def printBoard(self):
-        for i in range(24):
-            print(f'{i} - {self.board[i].checkers}')
-    
     # move checker
     def moveChecker(self, old_position, new_position):
-        result = self.board[new_position].place(self.board[old_position].player)
-        if result is None:
-            self.board[old_position].removePool()
-        elif result == -1:
+        if (self.board[old_position].player == "pWhite" and old_position <= new_position) or (self.board[old_position].player == "pBlack" and old_position >= new_position):
+            print("wrong way")
             return -1
+
+        if self.board[new_position].checkIfMoveisPossible(self.board[old_position].player) == -1:   # To be changed to current player
+            print("more than 1 checker")
+            return -1
+
+        tempDice = 0
+
+        if abs(old_position - new_position) == self.dice[0]:
+            print("dice[0]")
+            tempDice = self.dice[0]
+            self.dice[0] = 0;
+        elif abs(old_position - new_position) == self.dice[1]:
+            print("dice[1]")
+            tempDice = self.dice[1]
+            self.dice[1] = 0;
         else:
+            print("no dice matching")
+            return -1;
+
+        result = self.board[new_position].place(self.board[old_position].player) # To be changed to current player
+
+        if self.dice[0] == 0 and self.dice[1] == 0:
+            if self.doubles == True:
+                self.doubles = False
+                self.dice[0] = tempDice
+                self.dice[1] = tempDice
+            else:
+                self.switchPlayers()
+
+        if result is None:
+            print("normal move")
+            self.board[old_position].removePool()
+        else:
+            print("move with hitt")
             self.board[old_position].removePool()
             self.barPosition[result] += 1
             return 1
         return 0
 
+    def printBoard(self):
+        for i in range(24):
+            print(f'{i} - {self.board[i].checkers}')
+
+    def switchPlayers(self):
+        print(self.playerOnTurn)
+        print("-------------")
+        if self.playerOnTurn == self.IRLPlayer:
+            self.playerOnTurn = self.OnlinePlayer
+        else:
+            self.playerOnTurn = self.IRLPlayer
+        print(self.playerOnTurn)
+    
 games = {}
 
 # ------------------------------------------------------------------------------
@@ -275,14 +316,19 @@ def showGame(id):
         if id in games: 
             b = games[id].board
             dice = games[id].dice
-            return render_template("showBOard.html", board = b, id = id, dice = dice)
+            playerOnTurn = games[id].playerOnTurn
+            bearOffCheckers = games[id].bearOffCheckers
+            barPosition = games[id].barPosition
+
+            return render_template("showBOard.html", board = b, id = id, dice = dice, playerOnTurn=playerOnTurn, bearOffCheckers = bearOffCheckers, barPosition = barPosition)
         else:
             return render_template("gameNotFound.html")
 
 @app.route('/ajaxDiceRow/<game_id>', methods = ['GET'])
 def ajaxDiceRow(game_id):
-    print(game_id)
     games[game_id].dice = rowDice()
+    if games[game_id].dice[0] == games[game_id].dice[1]:
+        games[game_id].doubles = True
     return {'dice' : games[game_id].dice}
 
 @app.route('/ajaxMove', methods = ['POST'])
@@ -290,13 +336,16 @@ def ajax_request():
     old_pos_string = request.form['old_pos']
     new_pos_string = request.form['new_pos']
     game_id = request.form['game_id']
+    if new_pos_string[:6] != "point_":
+        print("Here2")
+        return {'allowed' : False, 'currPlayer' : games[game_id].playerOnTurn}
+
     old_pos = int(old_pos_string[6:8])
     new_pos = int(new_pos_string[6:8])
-
     hitt = False
 
     result = games[game_id].moveChecker(old_pos,new_pos)
-
+    print("Here2")
     if result == -1:
         allowed = False
     else:
@@ -304,7 +353,8 @@ def ajax_request():
         if result == 1:
             hitt = True
 
-    return {'allowed':allowed, 'hitt':hitt}
+    print(games[game_id].playerOnTurn)
+    return {'allowed':allowed, 'hitt':hitt, 'dice':games[game_id].dice, 'currPlayer' : games[game_id].playerOnTurn}
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
