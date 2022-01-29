@@ -38,7 +38,7 @@ head %}
     margin-bottom: 20px;
   }
   .myRow {
-    height: 100%;
+    height: 50%;
     width: 100%;
     display: flex;
     justify-content: center;
@@ -146,7 +146,7 @@ head %}
                         {% endfor %}
                     </div>
                 </div>
-                <div id="wOut" class="sidePoint">
+                <div name="no_name" id="wOut" class="sidePoint" ondrop="drop(event)" ondragover="allowDrop(event)">
                     {% for i in range(bearOffCheckers["pWhite"]) %}
                         <div name="checker_out_{{i}}" id="checker_out_{{i}}" class="White checker" draggable="false" ondragstart="dragErr(event)"></div>
                     {% endfor %}
@@ -202,7 +202,7 @@ head %}
                         {% endfor %}
                     </div>
                 </div>
-                <div id="bOut" class="sidePoint">
+                <div name="no_name" id="bOut" class="sidePoint" ondrop="drop(event)" ondragover="allowDrop(event)">
                     {% for i in range(bearOffCheckers["pBlack"]) %}
                     <div name="checker_out_{{i}}" id="checker_out_{{i}}" class="Black checker" draggable="false" ondragstart="dragErr(event)"></div>
                     {% endfor %}
@@ -224,7 +224,7 @@ head %}
             {% if dice[1] == 0 %} 
                 <img id="dice_2">
             {% else %}
-                <img id="dice_1" src="../static/images/dices/k2_{{ dice[1] }}.png">
+                <img id="dice_2" src="../static/images/dices/k2_{{ dice[1] }}.png">
             {% endif %}
         </div>
 
@@ -281,14 +281,25 @@ function drop(ev) {
         currPlayer = data.currPlayer;
         if (al) {
             hitt = data.hitt;
+            var checker = document.getElementById(image);
             if (hitt) {
+                var content = ev.target.innerHTML;
                 ev.target.innerHTML = '';
+                if(checker.classList.contains('Black')){
+                    var temp = document.getElementById('wHitt').innerHTML
+                    temp = temp + content
+                    document.getElementById('wHitt').innerHTML = temp; 
+                }
+                else if(checker.classList.contains('White')){
+                    var temp = document.getElementById('bHitt').innerHTML
+                    temp = temp + content
+                    document.getElementById('bHitt').innerHTML = temp; 
+                }
             }
-            ev.target.appendChild(document.getElementById(image));
+            ev.target.appendChild(checker);
             showDices(data);
             changePlayer(data);
         }
-        
     });
 }
 
@@ -305,19 +316,33 @@ function diceRow(){
 
 function showDices(data) {
     dice = data.dice;
+    turnPossible = data.turnPossible;
     document.getElementById('dice_1').src = (dice[0] > 0) ? '/static/images/dices/k1_' + dice[0] + '.png' : document.getElementById('dice_1').innerHTML = '';
-    document.getElementById('dice_2').src = (dice[1] > 0) ? '/static/images/dices/k2_' + dice[1] + '.png' : document.getElementById('dice_1').innerHTML = '';
+    document.getElementById('dice_2').src = (dice[1] > 0) ? '/static/images/dices/k2_' + dice[1] + '.png' : document.getElementById('dice_2').innerHTML = '';
     document.getElementById('diceButton').style.visibility = (dice[1] == 0 && dice[0] == 0) ? "visible" : "hidden";
     console.log(dice);
+    if (turnPossible == false){
+        setTimeout(function () {
+            document.getElementById('dice_1').src = document.getElementById('dice_1').innerHTML = '';
+            document.getElementById('dice_2').src = document.getElementById('dice_2').innerHTML = '';
+            document.getElementById('diceButton').style.visibility = "visible";
+            changePlayer(data);
+        }, 5000);
+    }
 };
 
 function changePlayer(data){
     currPlayer = data.currPlayer;
     document.getElementById("currPlayer").innerHTML = "Player on turn:" + currPlayer;
+    NodeList.prototype.forEach = Array.prototype.forEach;
     if (currPlayer == "pWhite"){
+        document.getElementById('wHitt').querySelectorAll('div.White').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
+        document.getElementById('bHitt').querySelectorAll('div.Black').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
         document.querySelectorAll('div.point>div.White').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
         document.querySelectorAll('div.point>div.Black').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
     }else{
+        document.getElementById('bHitt').querySelectorAll('div.Black').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
+        document.getElementById('wHitt').querySelectorAll('div.White').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
         document.querySelectorAll('div.point>div.Black').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
         document.querySelectorAll('div.point>div.White').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
     }

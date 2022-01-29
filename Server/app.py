@@ -1,10 +1,13 @@
+from itertools import count
 import os
 from turtle import position
 import uuid
 import random
+import time
 
 from flask import Flask, request, render_template, redirect, url_for, flash
 from flask_login import login_user, login_required, current_user, logout_user, LoginManager
+from sqlalchemy import null
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from flask_mail import Mail, Message
@@ -106,6 +109,7 @@ class Game:
         self.board = [BoardPosition() for i in range(24)]    # the 24 points on the board
         self.barPosition = {"pWhite": 0, "pBlack": 0}        # the plase wghere the checkers that have been hit go
         self.bearingOffStage = {"pWhite": False, "pBlack": False}
+        self.smallesDiceBear = {"pWhite": 6, "pBlack": 6}
         self.bearOffCheckers = {"pWhite": 0, "pBlack": 0}    # the number of checkers that have been beared off
         self.dice = [0, 0]
         self.doubles = False
@@ -118,31 +122,85 @@ class Game:
         self.board[18] = BoardPosition('pBlack', 5)
         self.board[23] = BoardPosition('pWhite', 2)
 
+    def turnPossible(self):
+        if self.barPosition[self.playerOnTurn] == 0:
+            return 0
+        else:
+            new_pos1 = None
+            new_pos2 = None
+            if self.playerOnTurn == "pWhite":
+                new_pos1 = 24 - self.dice[0]
+                new_pos2 = 24 - self.dice[1]
+            else:
+                new_pos1 = self.dice[1] - 1
+                new_pos2 = self.dice[0] - 1
+             
+            if self.board[new_pos1].checkIfMoveisPossible(self.playerOnTurn) == -1 and self.board[new_pos2].checkIfMoveisPossible(self.playerOnTurn) == -1:
+                print("no possible move")
+                return -1
+        return 0
+
+    def upfatesmallesDiceBear(self):
+        if self.bearingOffStage[self.playerOnTurn] == True:
+            if self.playerOnTurn == "pWhite":
+                for i in range (5,-1, -1):
+                    if self.board[i].player == self.playerOnTurn:
+                        return
+                    self.smallesDiceBear[self.playerOnTurn] -= 1
+            elif self.playerOnTurn == "pBlack":
+                for i in range (19, 24):
+                    if self.board[i].player == self.playerOnTurn:
+                        return
+                    self.smallesDiceBear[self.playerOnTurn] -= 1
+
+    def checkBearingStage(self):
+        checkersHome = 0
+        counter = None
+        if self.playerOnTurn == "pWhite":
+            counter = 0;
+        elif self.playerOnTurn == "pBlack":
+            counter = 18;
+        for i in range (6):
+            if self.board[counter + i].player == self.playerOnTurn:
+                checkersHome += self.board[i].checkers
+        if checkersHome == 15:
+            self.bearingOffStage[self.playerOnTurn] = True;
+
     # move checker
     def moveChecker(self, old_position, new_position):
-        if (self.board[old_position].player == "pWhite" and old_position <= new_position) or (self.board[old_position].player == "pBlack" and old_position >= new_position):
-            print("wrong way")
-            return -1
+        self.upfatesmallesDiceBear()
+        if self.bearingOffStage[self.playerOnTurn] == False:
+            self.checkBearingStage()
 
-        if self.board[new_position].checkIfMoveisPossible(self.board[old_position].player) == -1:   # To be changed to current player
-            print("more than 1 checker")
+        if old_position != -1 and old_position != 24:
+            if (self.board[old_position].player == "pWhite" and old_position <= new_position) or (self.board[old_position].player == "pBlack" and old_position >= new_position):
+                return -1
+            
+            if self.barPosition[self.playerOnTurn] > 0:
+                return -1
+        
+
+        if self.board[new_position].checkIfMoveisPossible(self.playerOnTurn) == -1:
             return -1
 
         tempDice = 0
 
         if abs(old_position - new_position) == self.dice[0]:
-            print("dice[0]")
             tempDice = self.dice[0]
             self.dice[0] = 0;
         elif abs(old_position - new_position) == self.dice[1]:
-            print("dice[1]")
             tempDice = self.dice[1]
             self.dice[1] = 0;
         else:
-            print("no dice matching")
-            return -1;
-
-        result = self.board[new_position].place(self.board[old_position].player) # To be changed to current player
+            if self.bearingOffStage[self.playerOnTurn] == True:
+                if self.dice[0] > self.smallesDiceBear[self.playerOnTurn] and (new_position == -1 or new_position == 24):
+                    self.dice[0] = 0;
+                elif self.dice[1] > self.smallesDiceBear[self.playerOnTurn] and (new_position == -1 or new_position == 24):
+                    self.dice[1] = 0;
+                else:
+                    return -1;
+            else:
+                return -1;
 
         if self.dice[0] == 0 and self.dice[1] == 0:
             if self.doubles == True:
@@ -152,14 +210,18 @@ class Game:
             else:
                 self.switchPlayers()
 
-        if result is None:
-            print("normal move")
+        if old_position != -1 and old_position != 24:
             self.board[old_position].removePool()
+        elif old_position == -1 or old_position == 24:
+            self.barPosition[self.playerOnTurn] -= 1;
+
+        if self.bearingOffStage[self.playerOnTurn] == True and (new_position == -1 or new_position == 24):
+            self.bearOffCheckers[self.playerOnTurn] += 1
         else:
-            print("move with hitt")
-            self.board[old_position].removePool()
-            self.barPosition[result] += 1
-            return 1
+            result = self.board[new_position].place(self.playerOnTurn)
+            if result:
+                self.barPosition[result] += 1
+                return 1
         return 0
 
     def printBoard(self):
@@ -167,13 +229,10 @@ class Game:
             print(f'{i} - {self.board[i].checkers}')
 
     def switchPlayers(self):
-        print(self.playerOnTurn)
-        print("-------------")
         if self.playerOnTurn == self.IRLPlayer:
             self.playerOnTurn = self.OnlinePlayer
         else:
             self.playerOnTurn = self.IRLPlayer
-        print(self.playerOnTurn)
     
 games = {}
 
@@ -329,23 +388,46 @@ def ajaxDiceRow(game_id):
     games[game_id].dice = rowDice()
     if games[game_id].dice[0] == games[game_id].dice[1]:
         games[game_id].doubles = True
-    return {'dice' : games[game_id].dice}
+    
+    turnPossible = True
+
+    if games[game_id].turnPossible() == -1:
+        games[game_id].switchPlayers()
+        turnPossible = False
+        games[game_id].doubles = False
+
+    return {'dice' : games[game_id].dice, 'turnPossible' : turnPossible, 'currPlayer' : games[game_id].playerOnTurn}
 
 @app.route('/ajaxMove', methods = ['POST'])
 def ajax_request():
     old_pos_string = request.form['old_pos']
     new_pos_string = request.form['new_pos']
     game_id = request.form['game_id']
-    if new_pos_string[:6] != "point_":
-        print("Here2")
-        return {'allowed' : False, 'currPlayer' : games[game_id].playerOnTurn}
 
-    old_pos = int(old_pos_string[6:8])
-    new_pos = int(new_pos_string[6:8])
+    old_pos = None
+    new_pos = None
+ 
+    if old_pos_string == "wHitt":
+        old_pos = 24
+    elif old_pos_string == "bHitt":
+        old_pos = -1
+    else:
+        old_pos = int(old_pos_string[6:8])
+    
+    if new_pos_string == "bOut":
+        new_pos = 24
+    elif new_pos_string == "wOut":
+        new_pos = -1
+    else:
+        if new_pos_string[:6] != "point_":
+            return {'allowed' : False, 'currPlayer' : games[game_id].playerOnTurn}
+        else:
+            new_pos = int(new_pos_string[6:8])
+
     hitt = False
 
     result = games[game_id].moveChecker(old_pos,new_pos)
-    print("Here2")
+
     if result == -1:
         allowed = False
     else:
@@ -353,7 +435,6 @@ def ajax_request():
         if result == 1:
             hitt = True
 
-    print(games[game_id].playerOnTurn)
     return {'allowed':allowed, 'hitt':hitt, 'dice':games[game_id].dice, 'currPlayer' : games[game_id].playerOnTurn}
 
 @app.route('/', methods=['GET', 'POST'])
