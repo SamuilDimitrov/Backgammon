@@ -1,20 +1,20 @@
-from itertools import count
 import os
-from turtle import position
 import uuid
 import random
-import time
+import json
+from datetime import datetime, timedelta
+from time import sleep
 
-from flask import Flask, request, render_template, redirect, url_for, flash
+from flask import Flask, request, render_template, redirect, url_for, flash, jsonify, abort
 from flask_login import login_user, login_required, current_user, logout_user, LoginManager
-from sqlalchemy import null
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
 from flask_mail import Mail, Message
-from itsdangerous import URLSafeTimedSerializer, SignatureExpired
+from itsdangerous import URLSafeTimedSerializer
+from flask_socketio import SocketIO, join_room, send, emit, leave_room
+
 
 from database import db_session, init_db
-from models import User
+from models import User, Device
 
 # ------------------------------------------------------------------------------
 
@@ -28,13 +28,32 @@ app.config.from_pyfile('config.cfg')
 # ------------------------------------------------------------------------------
 
 mail = Mail(app)
+socketio = SocketIO(app)
 s = URLSafeTimedSerializer('Thisisasecret!')
+
+# ------------------------------------------------------------------------------
+
 init_db()
+d = Device.query.all()
+u = User.query.all()
+if len(d) == 0:
+    devicesIdsFile = open('deviceID.txt', 'r')
+    deviceIDs = devicesIdsFile.readlines() 
+    for deviceID in deviceIDs:
+        newDevice = Device(deviceId=deviceID)
+        db_session.add(newDevice)
+        db_session.commit()
+
+if len(u) == 0:
+    user = user = User(username="test1", password=generate_password_hash("1234"), email="a@b", name="GG")
+    db_session.add(user)
+    db_session.commit()
 
 # ------------------------------------------------------------------------------
 
 login_manager = LoginManager()
 login_manager.init_app(app)
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -48,7 +67,63 @@ def unauthorized():
 
 @app.errorhandler(404)
 def page_not_found(e):
-    return render_template("error_404.html"), 400
+    return render_template("error_404.html"), 404
+
+# ------------------------------------------------------------------------------
+
+games = {}
+numberDevicesConected = 0
+gameId_device = {}
+
+# ------------------------------------------------------------------------------
+
+@socketio.on('connect')
+def on_connect():
+    print("Someone is trying to conect")
+    global numberDevicesConected
+    numberDevicesConected += 1
+    # send("Someone had connected", broadcast=True)
+
+# @socketio.on('connectingDevice')
+# def on_connectingDevice(deviceId):
+#     conectingDevice = Device.query.filter_by(deviceId=deviceId).first()
+#     conectingDevice.status = "connected"
+#     db_session.commit()
+#     device_socket[deviceId] = request.sid
+#     print(device_socket)
+
+@socketio.on('disconnect')
+def on_disconnect():
+    # disconectedDeviceId = device_socket[list(device_socket.keys())[list(device_socket.values()).index(request.sid)]]
+    # disconectedDevice = Device.query.filter_by(deviceId=disconectedDeviceId).first()
+    # disconectedDevice.status = "disconnected"
+    # db_session.commit()
+    # device_socket.pop(disconectedDeviceId)
+    global numberDevicesConected
+    numberDevicesConected -= 1
+
+@socketio.on('message')
+def handleMessage(msg):
+    print('Message:', str(msg))
+    send(msg)
+
+
+@socketio.on('join')
+def on_join(data):
+    client_nubmer = random.randint(1000, 100000)
+    username = "Board #: " + str(client_nubmer)
+    game_id = data['game_id']    
+    print("Game ID = ")
+    print(game_id)
+    join_room(game_id)
+    emit("guests_names", {"oponent" : username}, to=game_id)
+
+@socketio.on('leave')
+def on_leave(data):
+    username = data['username']
+    game_id = data['game_id']
+    leave_room(game_id)
+    send(username + ' has left the room.', to=game_id)
 
 # ------------------------------------------------------------------------------
 
@@ -103,9 +178,13 @@ class BoardPosition:
 
 class Game:
     def __init__(self, OnlinePlayer = "pWhite", IRLPlayer = "pBlack"):
+        self.moveDirection = []
+        self.deviceReady = False
         self.OnlinePlayer = OnlinePlayer
+        self.gameEnd = False
         self.IRLPlayer = IRLPlayer
-        self.playerOnTurn = pickStartPlayer()
+        self.playerOnTurn = "pWhite"
+        # self.playerOnTurn = pickStartPlayer()
         self.board = [BoardPosition() for i in range(24)]    # the 24 points on the board
         self.barPosition = {"pWhite": 0, "pBlack": 0}        # the plase wghere the checkers that have been hit go
         self.bearingOffStage = {"pWhite": False, "pBlack": False}
@@ -140,7 +219,7 @@ class Game:
                 return -1
         return 0
 
-    def upfatesmallesDiceBear(self):
+    def updatesmallesDiceBear(self):
         if self.bearingOffStage[self.playerOnTurn] == True:
             if self.playerOnTurn == "pWhite":
                 for i in range (5,-1, -1):
@@ -167,40 +246,59 @@ class Game:
             self.bearingOffStage[self.playerOnTurn] = True;
 
     # move checker
-    def moveChecker(self, old_position, new_position):
-        self.upfatesmallesDiceBear()
+    def moveChecker(self, oldPosition, newPosition):
+        if self.gameEnd == True:
+            return -1
+        self.updatesmallesDiceBear()
         if self.bearingOffStage[self.playerOnTurn] == False:
             self.checkBearingStage()
 
-        if old_position != -1 and old_position != 24:
-            if (self.board[old_position].player == "pWhite" and old_position <= new_position) or (self.board[old_position].player == "pBlack" and old_position >= new_position):
+        if oldPosition != -1 and oldPosition != 24:
+            if (self.board[oldPosition].player == "pWhite" and oldPosition <= newPosition) or (self.board[oldPosition].player == "pBlack" and oldPosition >= newPosition):
                 return -1
             
             if self.barPosition[self.playerOnTurn] > 0:
                 return -1
         
-
-        if self.board[new_position].checkIfMoveisPossible(self.playerOnTurn) == -1:
+        if self.board[newPosition].checkIfMoveisPossible(self.playerOnTurn) == -1:
             return -1
 
         tempDice = 0
 
-        if abs(old_position - new_position) == self.dice[0]:
+        if abs(oldPosition - newPosition) == self.dice[0]:
             tempDice = self.dice[0]
             self.dice[0] = 0;
-        elif abs(old_position - new_position) == self.dice[1]:
+        elif abs(oldPosition - newPosition) == self.dice[1]:
             tempDice = self.dice[1]
             self.dice[1] = 0;
         else:
             if self.bearingOffStage[self.playerOnTurn] == True:
-                if self.dice[0] > self.smallesDiceBear[self.playerOnTurn] and (new_position == -1 or new_position == 24):
+                if self.dice[0] > self.smallesDiceBear[self.playerOnTurn] and (newPosition == -1 or newPosition == 24):
                     self.dice[0] = 0;
-                elif self.dice[1] > self.smallesDiceBear[self.playerOnTurn] and (new_position == -1 or new_position == 24):
+                elif self.dice[1] > self.smallesDiceBear[self.playerOnTurn] and (newPosition == -1 or newPosition == 24):
                     self.dice[1] = 0;
                 else:
                     return -1;
             else:
                 return -1;
+
+        function_Result = 0
+
+        if oldPosition != -1 and oldPosition != 24:
+            self.board[oldPosition].removePool()
+        elif oldPosition == -1 or oldPosition == 24:
+            self.barPosition[self.playerOnTurn] -= 1;
+
+        if self.bearingOffStage[self.playerOnTurn] == True and (newPosition == -1 or newPosition == 24):
+            self.bearOffCheckers[self.playerOnTurn] += 1
+        else:
+            playerHit = self.board[newPosition].place(self.playerOnTurn)
+            if playerHit:
+                self.barPosition[playerHit] += 1
+                self.addMoveDirection(oldPosition, playerHit)
+                function_Result = 1
+        print("move-here")
+        self.addMoveDirection(oldPosition, newPosition)
 
         if self.dice[0] == 0 and self.dice[1] == 0:
             if self.doubles == True:
@@ -210,19 +308,7 @@ class Game:
             else:
                 self.switchPlayers()
 
-        if old_position != -1 and old_position != 24:
-            self.board[old_position].removePool()
-        elif old_position == -1 or old_position == 24:
-            self.barPosition[self.playerOnTurn] -= 1;
-
-        if self.bearingOffStage[self.playerOnTurn] == True and (new_position == -1 or new_position == 24):
-            self.bearOffCheckers[self.playerOnTurn] += 1
-        else:
-            result = self.board[new_position].place(self.playerOnTurn)
-            if result:
-                self.barPosition[result] += 1
-                return 1
-        return 0
+        return function_Result
 
     def printBoard(self):
         for i in range(24):
@@ -234,7 +320,35 @@ class Game:
         else:
             self.playerOnTurn = self.IRLPlayer
     
-games = {}
+    def checkForWin(self):
+        if self.bearOffCheckers["pWhite"] == 15:
+            self.gameEnd = True
+            return "White"
+        elif self.bearOffCheckers["pBlack"] == 15:
+            self.gameEnd = True
+            return "Black"
+        return None
+
+    def addMoveDirection(self, oldPosition, newPosition):
+        if self.playerOnTurn==self.IRLPlayer:
+            return
+        direcrionStart = str(oldPosition) + "_"
+        direcrionEnd = None
+        if newPosition == "pWhite": #if checker is white and has been hit
+            direcrionStart += "1"
+            direcrionEnd = "outWhite_" #The place where hit White checkers go
+            direcrionEnd += str(self.barPosition["pWhite"])
+        elif newPosition == "pBlack": #if checker is black and has been hit
+            direcrionStart += "1"
+            direcrionEnd = "outBlack_" #The place where hit Black checkers go
+            direcrionEnd += str(self.barPosition["pBlack"])
+        else:
+            direcrionStart += str(self.board[oldPosition].checkers + 1)
+            direcrionEnd = str(newPosition)
+            direcrionEnd += '_'
+            direcrionEnd += str(self.board[newPosition].checkers)
+        self.moveDirection.append({"From":direcrionStart, "To":direcrionEnd})
+        print(self.moveDirection)
 
 # ------------------------------------------------------------------------------
 
@@ -264,7 +378,7 @@ def register():
             db_session.commit()
             login_user(user)
             flash('You registered and are now logged in. Welcome!', 'success')
-            return redirect(url_for('login'))
+            return redirect(url_for('index'))
         else:
             flash("Passwords doesn`t match!","danger")
     return render_template("register.html")
@@ -345,6 +459,7 @@ def profile():
 
 # ------------------------------------------------------------------------------
 
+# to do
 @app.route('/uploadPhoto', methods=['POST'])
 def uploadPhoto():
     files = request.files
@@ -356,17 +471,57 @@ def uploadPhoto():
     if file:
         filename = file.filename
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+
     return "OK"
 
 # ------------------------------------------------------------------------------
 
-@app.route('/createGame', methods=['GET', 'POST'])
+@app.route('/createGame', methods=['POST'])
 @login_required
 def createGame():
-    if request.method == "GET":
-        game_id = str(uuid.uuid4())
-        games[game_id] = Game()
-    return redirect(url_for('showGame', id = game_id))
+    deviceId = request.form['deviceId']
+    if current_user.currentGameId != None:
+        try:
+            connectedDeviceId = gameId_device[current_user.currentGameId]
+            if connectedDeviceId != deviceId:
+                flash("You are already in game with another device","danger")
+                return {'result' : "index"}
+            else:
+                return {'id' : current_user.currentGameId}
+        except:
+            pass
+            
+    device = Device.query.filter_by(deviceId = deviceId).first()
+    if device is None or (device.status != "connected" and device.status != "inGame"):
+
+        flash("There is no avaliable device with that Id","danger")
+        return {'result' : "index"}
+    timeSinceLastDeviceUpdate = datetime.now() - device.lastOnline
+    if device.lastOnline == None :
+        flash("There is no avaliable device with that Id","danger")
+        return {'result' : "index"}
+    elif timeSinceLastDeviceUpdate.total_seconds() > 6.0:
+        flash("There is no avaliable device with that Id","danger")
+        return {'result' : "index"}
+    game_id = str(uuid.uuid4())
+    print(game_id)
+    games[game_id] = Game()
+    gameId_device[game_id] = deviceId
+
+    for i in range(20):
+        sleep(1)
+        if games[game_id].deviceReady == True:
+            current_user.currentGameId = game_id;
+            db_session.commit()
+            return {'id' : game_id}
+    # data = {'game_id': game_id}
+    # socketio.emit("gameStart", data, to=device_socket[deviceId])
+    games.pop(game_id)
+    gameId_device.pop(game_id)
+
+    flash("Coucld not connect to the selected device. Try again later","danger")
+    return {'result' : "index"}
+    
 
 @app.route('/showGame/<id>', methods=['GET', 'POST'])
 @login_required
@@ -378,25 +533,40 @@ def showGame(id):
             playerOnTurn = games[id].playerOnTurn
             bearOffCheckers = games[id].bearOffCheckers
             barPosition = games[id].barPosition
-
-            return render_template("showBOard.html", board = b, id = id, dice = dice, playerOnTurn=playerOnTurn, bearOffCheckers = bearOffCheckers, barPosition = barPosition)
+            OnlinePlayer = games[id].OnlinePlayer
+            return render_template("showBOard.html", board = b, id = id, dice = dice, playerOnTurn=playerOnTurn, bearOffCheckers = bearOffCheckers, barPosition = barPosition, OnlinePlayer = OnlinePlayer)
         else:
             return render_template("gameNotFound.html")
 
+@app.route("/delete/<gameId>", methods = ['GET'])
+def deleteGame(gameId):
+    games.pop(gameId)
+    gameId_device.pop(gameId)
+    current_user.currentGameId = None
+    db_session.commit()
+    return redirect(url_for('index'))
+
 @app.route('/ajaxDiceRow/<game_id>', methods = ['GET'])
 def ajaxDiceRow(game_id):
-    games[game_id].dice = rowDice()
-    if games[game_id].dice[0] == games[game_id].dice[1]:
-        games[game_id].doubles = True
-    
-    turnPossible = True
+    print("here----------------------------------------------------------------------")
+    if games[game_id].dice[0] == 0 and games[game_id].dice[1] == 0:  
+        games[game_id].dice = rowDice()
+        if games[game_id].dice[0] == games[game_id].dice[1]:
+            games[game_id].doubles = True
+        
+        turnPossible = True
 
-    if games[game_id].turnPossible() == -1:
-        games[game_id].switchPlayers()
-        turnPossible = False
-        games[game_id].doubles = False
+        if games[game_id].turnPossible() == -1:
+            games[game_id].switchPlayers()
+            turnPossible = False
+            games[game_id].doubles = False
+        print("Game id = ")
+        print(game_id)
+        socketio.emit("diceResult",  {'dice' : games[game_id].dice, 'turnPossible' : turnPossible, 'currPlayer' : games[game_id].playerOnTurn}, to=game_id)
+        return {'dice' : games[game_id].dice, 'turnPossible' : turnPossible, 'currPlayer' : games[game_id].playerOnTurn}
+    else:
+        return {'dice' : games[game_id].dice, 'currPlayer' : games[game_id].playerOnTurn}
 
-    return {'dice' : games[game_id].dice, 'turnPossible' : turnPossible, 'currPlayer' : games[game_id].playerOnTurn}
 
 @app.route('/ajaxMove', methods = ['POST'])
 def ajax_request():
@@ -432,10 +602,105 @@ def ajax_request():
         allowed = False
     else:
         allowed = True
+
         if result == 1:
             hitt = True
 
-    return {'allowed':allowed, 'hitt':hitt, 'dice':games[game_id].dice, 'currPlayer' : games[game_id].playerOnTurn}
+    win = games[game_id].checkForWin()
+    gameEnd = False
+    if win != None:
+        gameEnd = True
+
+    return {'allowed':allowed, 'hitt':hitt, 'dice':games[game_id].dice, 'currPlayer' : games[game_id].playerOnTurn, 'gameEnd' : gameEnd, 'winer' : win}
+
+# ------------------------------------------------------------------------------
+
+@app.route("/deviceUpdate", methods=['GET'])
+def deviceUpdate():
+    deviceId = request.args.get('deviceId')
+    connectingDevice = Device.query.filter_by(deviceId=deviceId).first()
+
+    if connectingDevice is None:
+        abort(404)
+    else:
+        if connectingDevice.status != "connected" and connectingDevice.status != "inGame":
+            connectingDevice.status = "connected"
+        connectingDevice.lastOnline = datetime.now()
+        db_session.commit()
+
+    try:
+        if connectingDevice.status != "inGame":
+            connectingDevice.status = "inGame"
+            db_session.commit()
+        gameId = list(gameId_device.keys())[list(gameId_device.values()).index(deviceId)]
+        return jsonify(gameId = gameId)
+    except:
+        pass
+    return {}
+    
+@app.route("/getGameData", methods=['GET'])
+def getGameData():
+    deviceId = request.args.get('deviceId')
+    gameId = request.args.get('gameId')
+    connectingDevice = Device.query.filter_by(deviceId=deviceId).first()
+    if connectingDevice is None:
+        abort(404)
+
+    output = {}
+    try:
+        if connectingDevice.status != "inGame":
+            connectingDevice.status = "inGame"
+            db_session.commit()
+        gameId = list(gameId_device.keys())[list(gameId_device.values()).index(deviceId)]
+        output["gameId"] = gameId
+        output["playerOnTurn"] = games[gameId].playerOnTurn
+        if len(games[gameId].moveDirection) != 0:
+            temp = games[gameId].moveDirection[:]
+            games[gameId].moveDirection.clear()
+            output['move'] = temp
+        if games[gameId].dice != [0, 0]:
+            output['dice'] = games[gameId].dice
+    except:
+        pass
+
+    return output
+
+@app.route("/confirmGameStart", methods=['GET'])
+def confirmGameStart():
+    deviceId = request.args.get('deviceId')
+    gameId = request.args.get('gameId')
+    device = Device.query.filter_by(deviceId=deviceId).first()
+    
+    if device is None:
+        abort(404)
+
+    try:
+        if gameId_device[gameId] != deviceId:
+            abort(404)
+    except:
+        return abort(404)
+    games[gameId].deviceReady = True
+    return jsonify(
+        gameId=gameId,
+        playerOnTurn=games[gameId].playerOnTurn,
+        playerColor=games[gameId].IRLPlayer,
+    )
+
+# ------------------------------------------------------------------------------
+
+@app.route('/shortTask')
+def short_running_task():
+  start = datetime.now()
+  return 'Started at {0}, returned at {1}'.format(start, datetime.now())
+
+# a long running tasks that returns after 30s
+@app.route('/longTask')
+def long_running_task():
+  start = datetime.now()
+  sleep(30)
+  return 'Started at {0}, returned at {1}'.format(start, datetime.now())
+
+# ------------------------------------------------------------------------------
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -443,3 +708,20 @@ def index():
         return render_template("index.html")
     else:
         return render_template("index_for_non_users.html")
+
+def shutdown_server():
+    func = request.environ.get('werkzeug.server.shutdown')
+    if func is None:
+        raise RuntimeError('Not running with the Werkzeug Server')
+    func()
+
+@app.route('/shutdown', methods=['GET'])
+def shutdown():
+    shutdown_server()
+    return 'Server shutting down...'
+
+def processPhotos():
+    return 0
+
+if __name__ == '__main__':
+    socketio.run(app)
