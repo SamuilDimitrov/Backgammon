@@ -5,14 +5,48 @@ Home
 {% endblock %}
 
 {% block body %}
-
-
 <div class="row justify-content-center mt-2">
     <div class="col-md-4">
-        <h3 style="margin-top: 15px; text-align: center;">Hello There</h3>
-        <a href="{{ url_for('createGame') }}" class="btn btn-primary">Create Game</a>
+        <div id="mainDiv">
+            <h3 style="margin-top: 15px; text-align: center;">Please enter the device Id that you want to play with:</h3>
+            <div class="form-group">
+                <label for="exampleInputUsername">Device Id</label>
+                <input id="deviceId" type="text" name="deviceId" class="form-control" placeholder="Device Id" maxlength="12" required />
+            </div>
+            <button onclick="diceRow()" class="btn btn-outline-primary">Start game</button>
+        </div>
     </div>
 </div>
 
+<script>
+    function diceRow() {
+        var x = document.getElementById("deviceId").value;
+        if(x == ""){
+            return false;
+        }
+        document.getElementById("mainDiv").classList.add("d-flex", "justify-content-center");
+        document.getElementById("mainDiv").innerHTML = "";
+        var loader = document.createElement('div');
+        loader.className = "spinner-border";
+        document.getElementById("mainDiv").appendChild(loader);
+        $.ajax({
+            url: "/createGame",
+            method: "POST",
+            data: {
+                deviceId: x,
+            },
+            async: true,
+        }).done(function (data) {
+            var result = data.result;
+            var id = data.id;
+            if (result == "index"){
+                location.reload();
+            }
+            if (id.length > 0){
+                location.replace("/showGame/" + id)
+            }
+        })
+    };   
+</script>
 
 {% endblock %}
