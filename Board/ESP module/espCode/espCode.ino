@@ -82,8 +82,6 @@ int currX, currY;
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // Turn off BROWN_OUT detector
 
-  Serial.begin(115200);
-
   //  Initialise I2C Bus and LCD display
   Wire1.begin(I2C_SDA, I2C_SCL, 100000);
 
@@ -98,7 +96,6 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
   }
-
   writeToDisplay("Conencted to", ssid);
   delay(1000);
   lcd.clear();  //clear display
@@ -117,7 +114,6 @@ void setup() {
   pinMode(MAIN_BUTTON, INPUT_PULLUP);
 
   writeToDisplay("Waiting for game", "");
-  Serial.println("Setup - OK");
 }
 
 void loop() {
@@ -135,7 +131,6 @@ void loop() {
           break;
         }
       }
-      Serial.println("row");
       RowDice();
       String dice_str = "";
       dice_str += dices.dice1; dice_str += " and "; dice_str += dices.dice2;
@@ -154,15 +149,19 @@ void loop() {
       
       do {
         sendResult = sendPhoto();
-        if (sendResult == -1) {
-          //to-do
+        if (sendResult == 1) {
+          writeToDisplay("Check for camera", "obstructions");
+        }else if (sendResult == 2){
+          writeToDisplay("Illegal move.", "Correct your move");
+        }
+        else if (sendResult == 3){
+          writeToDisplay("Game not", "detected.");
         }
         delay(500);
         sendResult = 0;
       } while (sendResult != 0);
     }
     else{
-//      Serial.println("P-computer");
       if (millis() - lastRequestTime >= 3000) {
         getGameData();
         if (dices.dice1 == 0 && dices.dice2 == 0){
@@ -182,15 +181,41 @@ void loop() {
   }
 }
 
+// Reset device to not playing
 void resetGame(){
   dices.dice1 = 0;
   dices.dice2 = 0;
   gameId = "";
   playerOnTurn = "";
   devicePlayerColor = "";
+  
+  int distanceToMove = currY;
+  digitalWrite(DIR_PIN_Y, false);
+  int stepsToMove = (abs(distanceToMove) * 200) / 80;
+  for (int i = 0; i < stepsToMove; i++) {
+    digitalWrite(STEP_PIN_Y, HIGH);
+    delayMicroseconds(2000);
+    digitalWrite(STEP_PIN_Y, LOW);
+    delayMicroseconds(2000);
+  }
+  currY = 0;
+  delay(500);
+
+  int distanceToMove = currX;
+  digitalWrite(DIR_PIN_X, false);
+  int stepsToMove = (abs(distanceToMove) * 200) / 80;
+  for (int i = 0; i < stepsToMove; i++) {
+    digitalWrite(STEP_PIN_X, HIGH);
+    delayMicroseconds(2000);
+    digitalWrite(STEP_PIN_X, LOW);
+    delayMicroseconds(2000);
+  }
+  currX = 0;
+  delay(500);
   writeToDisplay("Waiting for game", "");
 }
 
+// write To Display
 uint8_t writeToDisplay(String line1, String line2) {
   lcd.clear();
   lcd.setCursor(0, 0);  //Set cursor to character 0 on line 0
@@ -232,8 +257,6 @@ int updateDeviceStatus() {
         DynamicJsonDocument doc(capacity);
         DeserializationError error = deserializeJson(doc, payload);
         if (error) {
-          Serial.print("deserializeJson() failed: ");
-          Serial.println(error.c_str());
           return 1;
         }
         
@@ -245,10 +268,6 @@ int updateDeviceStatus() {
       else if (payload == "{}\n" && gameId != "") {
         resetGame();
       }
-    }
-    else {
-      Serial.print("Error on HTTP request with code: ");
-      Serial.println(httpCode);
     }
     http.end();
     return httpCode;
@@ -263,10 +282,6 @@ int getGameData() {
       String payload = http.getString();
       decodeJsonDirection(payload);
     }
-    else {
-      Serial.print("Error on HTTP request with code: ");
-      Serial.println(httpCode);
-    }
     http.end();
     return httpCode;
   }
@@ -279,10 +294,6 @@ int startGameRequest() {
     if (httpCode > 0) {
       String payload = http.getString();
       decodeJsonDirection(payload);
-    }
-    else {
-      Serial.print("Error on HTTP request with code: ");
-      Serial.println(httpCode);
     }
     http.end();
     return httpCode;
@@ -299,8 +310,6 @@ void decodeJsonDirection(String rawJson) {
   DeserializationError error = deserializeJson(doc, rawJson);
 
   if (error) {
-    Serial.print("deserializeJson() failed: ");
-    Serial.println(error.c_str());
     return;
   }
 
@@ -335,16 +344,6 @@ void decodeJsonDirection(String rawJson) {
   }
 }
 
-void led() {
-  //  digitalWrite(33, LOW);
-  //  delay(200);
-  //  digitalWrite(33, HIGH);
-  //  delay(200);
-  //  digitalWrite(33, LOW);
-  //  delay(200);
-  //  digitalWrite(33, HIGH);
-}
-
 void configureCamera() {
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -369,18 +368,16 @@ void configureCamera() {
   config.pixel_format = PIXFORMAT_JPEG;
 
   if (psramFound()) {
-    config.frame_size = FRAMESIZE_SVGA;
+    config.frame_size = FRAMESIZE_UXGA;
     config.jpeg_quality = 10;
     config.fb_count = 2;
   } else {
-    config.frame_size = FRAMESIZE_CIF;
+    config.frame_size = FRAMESIZE_SVGA;
     config.jpeg_quality = 12;
     config.fb_count = 1;
   }
-
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
-    //Serial.println("Camera err");
     delay(1000);
     ESP.restart();
   }
@@ -404,7 +401,7 @@ int sendPhoto() {
     uint32_t imageLen = fb->len;
     uint32_t extraLen = head.length() + tail.length();
     uint32_t totalLen = imageLen + extraLen;
-    String myPOST = "POST " + uploadPath + " HTTP/1.1\r\n" + "Host: " + serverName + "\r\n" + "Content-Length: " + String(totalLen) + "\r\n" + "Content-Type: multipart/form-data; boundary=SendPhoto" + "\r\n\r\n";
+    String myPOST = "POST " + uploadPath + "?deviceId=" + uniqueDeviceId + " HTTP/1.1\r\n" + "Host: " + serverName + "\r\n" + "Content-Length: " + String(totalLen) + "\r\n" + "Content-Type: multipart/form-data; boundary=SendPhoto" + "\r\n\r\n";
     client.print(myPOST);
     client.flush();
     client.print(head);
@@ -462,10 +459,13 @@ int sendPhoto() {
   }
   if (getBody == "OK") {
     return 0;
-  } else if (getBody) {
-    //to-do
+  } else if (getBody == "BAD_IMG") {
+    return 1;
+  } else if (getBody == "ILLEGAL_MOVE"){
+    return 2;
+  } else if (getBody == "NO_GAME_FOUND"){
+    return 3;
   }
-
 }
 
 void makePath(incomingDirection ckeckerMove) {
@@ -494,7 +494,7 @@ void makePath(incomingDirection ckeckerMove) {
   digitalWrite(ELECTROMAGNET, false);
 }
 
-void turnXmotor(int destinationX) { //to-do
+void turnXmotor(int destinationX) {
   int distanceToMove = currX - keyXCoordinates[destinationX];
   if (distanceToMove < 0) {
     digitalWrite(DIR_PIN_X, true);
@@ -513,7 +513,7 @@ void turnXmotor(int destinationX) { //to-do
   currX = keyXCoordinates[destinationX];
 }
 
-void turnYmotor(int destinationY) { //to-do
+void turnYmotor(int destinationY) {
   destinationY--;
   int distanceToMove = currY - keyYCoordinates[destinationY];
   if (distanceToMove < 0) {
@@ -532,16 +532,4 @@ void turnYmotor(int destinationY) { //to-do
   }
   currY = keyYCoordinates[destinationY];
   delay(500);
-}
-
-void test() {
-  for (int i = 0; i < 12; i++) {
-    turnXmotor(i);
-    delay(2000);
-  }
-  delay(1000);
-  for (int i = 13; i > -1; i--) {
-    turnYmotor(i);
-    delay(2000);
-  }
 }

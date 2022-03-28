@@ -357,7 +357,15 @@ function changePlayer(data){
     //     document.querySelectorAll('div.point>div.Black').forEach((function (x) { x.setAttribute("draggable", "true"); x.setAttribute("ondragstart", "drag(event)"); }))
     //     document.querySelectorAll('div.point>div.White').forEach((function (x) { x.setAttribute("draggable", "false"); x.setAttribute("ondragstart", "dragErr(event)"); }))
     // }
-}
+};
+
+function moveChecker(data){
+    var oldPosition = data.oldPos;
+    var newPosition = data.newPos;
+    var start = document.getElementById(oldPosition);
+    var end = document.getElementById(newPosition);
+    end.appendChild(start.firstElementChild);
+};
 
 socket.on("connect", () => {
     console.log("just connected the index page");
@@ -371,21 +379,18 @@ socket.on("message", function (msg) {
 });
 
 socket.on("diceResult", function (data) {
-    console.log("hello");
     showDices(data);
-});
-
-socket.on("move", function (data) {
-        move_piece(data);
 });
 
 socket.on("game_end", function (data) {
     // to-do
 });
 
+socket.on("moveChecker", function (data) {
+    moveChecker(data)
+});
+
 socket.on("guests_names", function (data) {
-    console.log("here");
-    console.log(data.oponent);
 });
 
 </script>
