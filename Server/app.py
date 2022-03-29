@@ -911,40 +911,12 @@ def confirmGameStart():
 
 # ------------------------------------------------------------------------------
 
-@app.route('/shortTask')
-def short_running_task():
-  start = datetime.now()
-  return 'Started at {0}, returned at {1}'.format(start, datetime.now())
-
-# a long running tasks that returns after 30s
-@app.route('/longTask')
-def long_running_task():
-  start = datetime.now()
-  sleep(30)
-  return 'Started at {0}, returned at {1}'.format(start, datetime.now())
-
-# ------------------------------------------------------------------------------
-
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if current_user.is_authenticated:
         return render_template("index.html")
     else:
         return render_template("index_for_non_users.html")
-
-def shutdown_server():
-    func = request.environ.get('werkzeug.server.shutdown')
-    if func is None:
-        raise RuntimeError('Not running with the Werkzeug Server')
-    func()
-
-@app.route('/shutdown', methods=['GET'])
-def shutdown():
-    shutdown_server()
-    return 'Server shutting down...'
-
-def processPhotos():
-    return 0
 
 if __name__ == '__main__':
     socketio.run(app)
