@@ -34,7 +34,9 @@ mail = Mail(app)
 socketio = SocketIO(app)
 s = URLSafeTimedSerializer('Thisisasecret!')
 
-# ------------------------------------------------------------------------------
+games = {}
+numberDevicesConected = 0
+gameId_device = {}
 
 init_db()
 d = Device.query.all()
@@ -74,12 +76,6 @@ def page_not_found(e):
 
 # ------------------------------------------------------------------------------
 
-games = {}
-numberDevicesConected = 0
-gameId_device = {}
-
-# ------------------------------------------------------------------------------
-
 @socketio.on('connect')
 def on_connect():
     print("Someone is trying to conect")
@@ -87,11 +83,6 @@ def on_connect():
 @socketio.on('disconnect')
 def on_disconnect():
     print("Someone is on_disconnected")
-
-@socketio.on('message')
-def handleMessage(msg):
-    print('Message:', str(msg))
-    send(msg)
 
 @socketio.on('join')
 def on_join(data):
@@ -167,8 +158,7 @@ class Game:
         self.OnlinePlayer = OnlinePlayer
         self.gameEnd = False
         self.IRLPlayer = IRLPlayer
-        self.playerOnTurn = "pBlack"
-        # self.playerOnTurn = pickStartPlayer()
+        self.playerOnTurn = pickStartPlayer()
         self.board = [BoardPosition() for i in range(24)]    # the 24 points on the board
         self.barPosition = {"pWhite": 0, "pBlack": 0}        # the plase wghere the checkers that have been hit go
         self.bearingOffStage = {"pWhite": False, "pBlack": False}
@@ -290,8 +280,7 @@ class Game:
                 self.dice[0] = tempDice
                 self.dice[1] = tempDice
             else:
-                # self.switchPlayers()
-                pass
+                self.switchPlayers()
         return function_Result
 
     def printBoard(self):
@@ -410,7 +399,7 @@ def forgotPassword():
         mail.send(msg)
         return render_template('check_email.html')
 
-@app.route('/reset/<token>', methods=["GET", "POST"])
+@app.route('/resetPassword/<token>', methods=["GET", "POST"])
 def reset_with_token(token):
     try:
         email = s.loads(token, salt="recover-key", max_age=3600)
@@ -584,7 +573,6 @@ def processPhoto(filename, gameId):
         print("here2")
         return -1
 
-
 # compare board position and extract moves
 def checkMoves(board, gameId):
     doubles = False
@@ -699,6 +687,7 @@ def checkMoves(board, gameId):
                     movedChackersInPoint.pop(pointsWithChanges[0])
                     pointsWithChanges.remove(pointsWithChanges[0])
             return 0
+
 # ------------------------------------------------------------------------------
 
 @app.route('/createGame', methods=['POST'])
@@ -772,6 +761,7 @@ def deleteGame(gameId):
 
 @app.route('/ajaxDiceRow/<game_id>', methods = ['GET'])
 def ajaxDiceRow(game_id):
+    print(game_id)
     if games[game_id].dice[0] == 0 and games[game_id].dice[1] == 0:  
         games[game_id].dice = rowDice()
         if games[game_id].dice[0] == games[game_id].dice[1]:
@@ -825,7 +815,6 @@ def ajax_request():
         allowed = False
     else:
         allowed = True
-        socketio.emit("moveChecker",  {'oldPos' : old_pos_string, 'newPos' : new_pos_string}, to=game_id)
         if result == 1:
             hitt = True
 
@@ -885,7 +874,6 @@ def getGameData():
             output['dice'] = games[gameId].dice
     except:
         pass
-
     return output
 
 @app.route("/confirmGameStart", methods=['GET'])
@@ -910,7 +898,6 @@ def confirmGameStart():
     )
 
 # ------------------------------------------------------------------------------
-
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if current_user.is_authenticated:
