@@ -1,14 +1,12 @@
 import os
-from unittest import result
 import uuid
 import random
-import json
 from datetime import datetime, timedelta
 from time import sleep
 import cv2 as cv
 import numpy as np
 
-from flask import Flask, request, render_template, redirect, url_for, flash, jsonify, abort
+from flask import Flask, request, render_template, redirect, url_for, flash, jsonify, abort, make_response, Response
 from flask_login import login_user, login_required, current_user, logout_user, LoginManager
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message
@@ -436,34 +434,29 @@ def profile():
 def uploadPhoto():
     deviceId = request.args.get('deviceId')
     files = request.files
-    print(files)
     if 'imageFile' not in request.files:
         return 'there is no imageFile in form!'
-    print ("file found")
     file = request.files['imageFile']
     if file:
         filename = file.filename
         name = filename[:len(filename)-4] + "_" + deviceId + filename[len(filename)-4:]
-        print(name)
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], name))
 
+    response = make_response(jsonify({"message": "The submitted move is possible", "error": "OK"}), 200,) #move is legal
     try:
         gameId = list(gameId_device.keys())[list(gameId_device.values()).index(deviceId)]
-        result = processPhoto(name, gameId)
-        if result == -1: #image can not be open
-            print("BAD_IMG")
-            return "BAD_IMG"
-        elif result == -2:
-            print("ILLEGAL_MOVE")
-            return "ILLEGAL_MOVE"
-        print("OK")
-        return "OK"
-    except:
-        print("NO_GAME_FOUND")
-        return "NO_GAME_FOUND"
-    
+    except: #game with this device does not exists
+        response = make_response(jsonify({"message": "This device is not in a game.", "error": "NO_GAME_FOUND"}), 404,) 
+        return response
+    result = processPhoto(name, gameId)
+    if result == -1: #image can not be open
+        response = make_response(jsonify({"message": "The image can not be open or was corrupted.", "error": "BAD_IMG"}), 400,)
+    elif result == -2: #the move is not possible
+        response = make_response(jsonify({"message": "The submitted move is not legal or possible.", "error": "ILLEGAL_MOVE"}), 400,)
+    return response 
+
 #get the avarege brightness of a checker
-def checkerColor(src1, center): 
+def getcheckerColor(src1, center): 
     x = center[1]
     y = center[0]
     avg = 0
@@ -512,13 +505,10 @@ def processPhoto(filename, gameId):
     try:
         src = cv.imread(photo_path)
     except:
-        print("here")
         return -1
 
     resized = cv.resize(src, (1200, 900), interpolation=cv.INTER_LINEAR) #resize img from 1600x1200 to 1200x900
-
     gray = cv.cvtColor(resized, cv.COLOR_BGR2GRAY) # turn img in black and white
-
     gray = cv.medianBlur(gray, 5) #blur img
 
     #detect curcles
@@ -527,10 +517,9 @@ def processPhoto(filename, gameId):
                                 param1=100, param2=20,
                                 minRadius=10, maxRadius=50)
 
-    #set up point coordinates
-    points_X_1_12 = [1039, 967, 896, 824, 753, 681, 479, 407, 336, 264, 193, 121]
-    points_X_13_24 = [111, 183, 254, 326, 397, 469, 671, 743, 814, 886, 957, 1029]
-    points_Y = []
+    #set up points coordinates
+    coordinates_of_points_1_12 = [1039, 967, 896, 824, 753, 681, 479, 407, 336, 264, 193, 121]
+    coordinates_of_points_13_24 = [111, 183, 254, 326, 397, 469, 671, 743, 814, 886, 957, 1029]
 
     board = [BoardPosition() for i in range(24)]    # temp board of checker positions form photo
     white = []
@@ -543,7 +532,7 @@ def processPhoto(filename, gameId):
             center = (i[0], i[1])
             
             #determine color of checker
-            checkerColor = checkerColor(gray, center)
+            checkerColor = getcheckerColor(gray, center)
             if checkerColor > 100:
                 checkerColor = "pWhite"
                 white.append(i)
@@ -554,23 +543,24 @@ def processPhoto(filename, gameId):
             #   determine the positions of all checkers
             point = -1
             if(i[1] > 450):
-                point = checkerPosition(points_X_13_24, 0, len(points_X_13_24) - 1, i[0])
+                point = checkerPosition(coordinates_of_points_13_24, 0, len(coordinates_of_points_13_24) - 1, i[0])
                 if point != -1:
                     point += 12
             else:
-                point = checkerPosition(points_X_1_12, 0, len(points_X_1_12) - 1 , i[0])
+                point = checkerPosition(coordinates_of_points_1_12, 0, len(coordinates_of_points_1_12) - 1 , i[0])
 
             if point == -1:
+                print("here -2 mixed incocert")
                 return -2 # incocert possition of checkers
 
             #   Check for mixed checkr on a point
-            if board[point].place(checkerColor) == -1: 
+            if board[point].place(checkerColor) == -1:
+                print("here -2 mixed checker")
                 return -2 # incocert possition of checkers
-        
+        print("good")
         return checkMoves(board, gameId)
-
     else:
-        print("here2")
+        print("here -1")
         return -1
 
 # compare board position and extract moves
@@ -589,6 +579,7 @@ def checkMoves(board, gameId):
         #switch checker color but kept number of checkers
         if games[gameId].board[i].player != board[i].player and board[i].player != None:
             if games[gameId].board[i].checkers > 2:
+                print("switch checker color but kept number of checkers")
                 return -2
             else:
                 checkersMoved += 1

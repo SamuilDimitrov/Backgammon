@@ -108,7 +108,7 @@ void setup()
     {
         delay(500);
     }
-    writeToDisplay("Conencted to", "WiFi");
+    writeToDisplay("Conencted to", WiFi.SSID());
     delay(1000);
     lcd.clear(); // clear display
 
@@ -535,26 +535,30 @@ int sendPhoto()
         client.stop();
         if (getBody.length() == 0)
         {
-            return 2;
+            return -2;
         }
     }
     else
     {
-        return 1;
+        return -1;
     }
-    if (getBody == "OK")
+
+    StaticJsonDocument<128> doc;
+    DeserializationError error = deserializeJson(doc, getBody);
+    String responce = doc["error"];
+    if (responce == "OK")
     {
         return 0;
     }
-    else if (getBody == "BAD_IMG")
+    else if (responce == "BAD_IMG")
     {
         return 1;
     }
-    else if (getBody == "ILLEGAL_MOVE")
+    else if (responce == "ILLEGAL_MOVE")
     {
         return 2;
     }
-    else if (getBody == "NO_GAME_FOUND")
+    else if (responce == "NO_GAME_FOUND")
     {
         return 3;
     }
