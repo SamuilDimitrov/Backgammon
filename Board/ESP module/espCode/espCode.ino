@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <WiFi.h>
+#include <WiFiManager.h>
 #include <HTTPClient.h>
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
@@ -34,8 +35,6 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 // set up WiFi connection and WiFi client
 WiFiClient client;
 HTTPClient http;
-const char *ssid = "ssid";
-const char *password = "password";
 
 /// Server properties
 String serverName = "192.168.0.110";
@@ -95,7 +94,13 @@ void setup()
     delay(500);
     //  Connect to WiFi
     WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
+    WiFiManager wm;
+    bool res;
+    res = wm.autoConnect("Backgammon"); //Deploy AP
+    if(!res) {
+        Serial.println("Failed to connect");
+        ESP.restart();
+    } 
     while (WiFi.status() != WL_CONNECTED)
     {
         delay(500);
