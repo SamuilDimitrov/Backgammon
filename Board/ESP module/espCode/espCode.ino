@@ -7,6 +7,8 @@
 #include "soc/rtc_cntl_reg.h"
 #include "esp_camera.h"
 #include <ArduinoJson.h>
+#include <WiFiManager.h>
+
 
 // Set up I2C bus pins
 #define I2C_SDA 0
@@ -34,8 +36,6 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 // set up WiFi connection and WiFi client
 WiFiClient client;
 HTTPClient http;
-const char *ssid = "ssid";
-const char *password = "password";
 
 /// Server properties
 String serverName = "192.168.0.110";
@@ -95,12 +95,20 @@ void setup()
     delay(500);
     //  Connect to WiFi
     WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
+    
+    WiFiManager wm;
+    bool res;
+    res = wm.autoConnect("Backgammon_Board"); //configure AP with ssid
+    if(!res) {
+        Serial.println("Failed to connect");
+        ESP.restart();
+    } 
+    
     while (WiFi.status() != WL_CONNECTED)
     {
         delay(500);
     }
-    writeToDisplay("Conencted to", ssid);
+    writeToDisplay("Conencted to", "WiFi");
     delay(1000);
     lcd.clear(); // clear display
 
@@ -230,9 +238,9 @@ void resetGame()
     currY = 0;
     delay(500);
 
-    int distanceToMove = currX;
+    distanceToMove = currX;
     digitalWrite(DIR_PIN_X, false);
-    int stepsToMove = (abs(distanceToMove) * 200) / 80;
+    stepsToMove = (abs(distanceToMove) * 200) / 80;
     for (int i = 0; i < stepsToMove; i++)
     {
         digitalWrite(STEP_PIN_X, HIGH);
@@ -357,7 +365,7 @@ void decodeJsonDirection(String rawJson)
     {
         count += (rawJson[i] == '{');
     }
-    const size_t capacity = JSON_OBJECT_SIZE(1) + 20 + JSON_ARRAY_SIZE(count) capacity = capacity + JSON_OBJECT_SIZE(3) + count * JSON_OBJECT_SIZE(2) + 20 + 20 * count;
+    const size_t capacity = JSON_OBJECT_SIZE(1) + 20 + JSON_ARRAY_SIZE(count) + JSON_OBJECT_SIZE(3) + count * JSON_OBJECT_SIZE(2) + 20 + 20 * count;
     DynamicJsonDocument doc(capacity);
     DeserializationError error = deserializeJson(doc, rawJson);
 
