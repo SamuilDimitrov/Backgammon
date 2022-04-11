@@ -1,9 +1,12 @@
 import os
+from unittest import result
 import uuid
 import random
 import json
 from datetime import datetime, timedelta
 from time import sleep
+import cv2 as cv
+import numpy as np
 
 from flask import Flask, request, render_template, redirect, url_for, flash, jsonify, abort
 from flask_login import login_user, login_required, current_user, logout_user, LoginManager
@@ -31,7 +34,9 @@ mail = Mail(app)
 socketio = SocketIO(app)
 s = URLSafeTimedSerializer('Thisisasecret!')
 
-# ------------------------------------------------------------------------------
+games = {}
+numberDevicesConected = 0
+gameId_device = {}
 
 init_db()
 d = Device.query.all()
@@ -71,52 +76,21 @@ def page_not_found(e):
 
 # ------------------------------------------------------------------------------
 
-games = {}
-numberDevicesConected = 0
-gameId_device = {}
-
-# ------------------------------------------------------------------------------
-
 @socketio.on('connect')
 def on_connect():
     print("Someone is trying to conect")
-    global numberDevicesConected
-    numberDevicesConected += 1
-    # send("Someone had connected", broadcast=True)
-
-# @socketio.on('connectingDevice')
-# def on_connectingDevice(deviceId):
-#     conectingDevice = Device.query.filter_by(deviceId=deviceId).first()
-#     conectingDevice.status = "connected"
-#     db_session.commit()
-#     device_socket[deviceId] = request.sid
-#     print(device_socket)
 
 @socketio.on('disconnect')
 def on_disconnect():
-    # disconectedDeviceId = device_socket[list(device_socket.keys())[list(device_socket.values()).index(request.sid)]]
-    # disconectedDevice = Device.query.filter_by(deviceId=disconectedDeviceId).first()
-    # disconectedDevice.status = "disconnected"
-    # db_session.commit()
-    # device_socket.pop(disconectedDeviceId)
-    global numberDevicesConected
-    numberDevicesConected -= 1
-
-@socketio.on('message')
-def handleMessage(msg):
-    print('Message:', str(msg))
-    send(msg)
-
+    print("Someone is on_disconnected")
 
 @socketio.on('join')
 def on_join(data):
     client_nubmer = random.randint(1000, 100000)
     username = "Board #: " + str(client_nubmer)
     game_id = data['game_id']    
-    print("Game ID = ")
-    print(game_id)
     join_room(game_id)
-    emit("guests_names", {"oponent" : username}, to=game_id)
+    emit("guests_names", {"board" : username}, to=game_id)
 
 @socketio.on('leave')
 def on_leave(data):
@@ -168,6 +142,7 @@ class BoardPosition:
                 hittPlayer = self.player
                 self.player = placing_player
                 return hittPlayer
+            return -1
         return None
 
     def removePool(self):
@@ -183,8 +158,7 @@ class Game:
         self.OnlinePlayer = OnlinePlayer
         self.gameEnd = False
         self.IRLPlayer = IRLPlayer
-        self.playerOnTurn = "pWhite"
-        # self.playerOnTurn = pickStartPlayer()
+        self.playerOnTurn = pickStartPlayer()
         self.board = [BoardPosition() for i in range(24)]    # the 24 points on the board
         self.barPosition = {"pWhite": 0, "pBlack": 0}        # the plase wghere the checkers that have been hit go
         self.bearingOffStage = {"pWhite": False, "pBlack": False}
@@ -307,7 +281,6 @@ class Game:
                 self.dice[1] = tempDice
             else:
                 self.switchPlayers()
-
         return function_Result
 
     def printBoard(self):
@@ -426,7 +399,7 @@ def forgotPassword():
         mail.send(msg)
         return render_template('check_email.html')
 
-@app.route('/reset/<token>', methods=["GET", "POST"])
+@app.route('/resetPassword/<token>', methods=["GET", "POST"])
 def reset_with_token(token):
     try:
         email = s.loads(token, salt="recover-key", max_age=3600)
@@ -459,9 +432,9 @@ def profile():
 
 # ------------------------------------------------------------------------------
 
-# to do
 @app.route('/uploadPhoto', methods=['POST'])
 def uploadPhoto():
+    deviceId = request.args.get('deviceId')
     files = request.files
     print(files)
     if 'imageFile' not in request.files:
@@ -470,9 +443,250 @@ def uploadPhoto():
     file = request.files['imageFile']
     if file:
         filename = file.filename
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        name = filename[:len(filename)-4] + "_" + deviceId + filename[len(filename)-4:]
+        print(name)
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], name))
 
-    return "OK"
+    try:
+        gameId = list(gameId_device.keys())[list(gameId_device.values()).index(deviceId)]
+        result = processPhoto(name, gameId)
+        if result == -1: #image can not be open
+            print("BAD_IMG")
+            return "BAD_IMG"
+        elif result == -2:
+            print("ILLEGAL_MOVE")
+            return "ILLEGAL_MOVE"
+        print("OK")
+        return "OK"
+    except:
+        print("NO_GAME_FOUND")
+        return "NO_GAME_FOUND"
+    
+#get the avarege brightness of a checker
+def checkerColor(src1, center): 
+    x = center[1]
+    y = center[0]
+    avg = 0
+    count = 0
+
+    for i in range(x - 10, x + 11):
+        for j in range(y - 10, y + 11):
+            count += 1
+            avg += src1[i, j]
+    
+    return (avg/count)
+
+# Detect on which point the checker is siting on 
+def checkerPosition(arr, startIndex, endIndex, coordinate): 
+    # Algorithm - Binary search
+    order = ""
+    if (arr[0] - arr[1]) > 0:   # see if order is ascending or descending
+        order = "descending"
+    else:
+        order = "ascending"
+    if endIndex >= startIndex:
+        mid = startIndex + ((endIndex - startIndex) // 2)
+        # If element is present at the middle itself
+        temp = abs(coordinate - arr[mid])
+        if temp <= 25:
+            return mid
+        # If element is before the mid
+        elif arr[mid] > coordinate:
+            if order == "ascending":
+                return checkerPosition(arr, startIndex, mid-1, coordinate)
+            else:
+                return checkerPosition(arr, mid + 1, endIndex, coordinate)
+        # If element is past the mid
+        else:
+            if order == "descending":
+                return checkerPosition(arr, startIndex, mid-1, coordinate)
+            else:
+                return checkerPosition(arr, mid + 1, endIndex, coordinate)
+    else:
+        # Element is not present in the array
+        return -1
+
+#get board possitions from photo
+def processPhoto(filename, gameId):
+    photo_path = UPLOAD_FOLDER +"\\" + filename;
+    try:
+        src = cv.imread(photo_path)
+    except:
+        print("here")
+        return -1
+
+    resized = cv.resize(src, (1200, 900), interpolation=cv.INTER_LINEAR) #resize img from 1600x1200 to 1200x900
+
+    gray = cv.cvtColor(resized, cv.COLOR_BGR2GRAY) # turn img in black and white
+
+    gray = cv.medianBlur(gray, 5) #blur img
+
+    #detect curcles
+    rows = gray.shape[0]
+    circles = cv.HoughCircles(gray, cv.HOUGH_GRADIENT, 1, rows / 16,
+                                param1=100, param2=20,
+                                minRadius=10, maxRadius=50)
+
+    #set up point coordinates
+    points_X_1_12 = [1039, 967, 896, 824, 753, 681, 479, 407, 336, 264, 193, 121]
+    points_X_13_24 = [111, 183, 254, 326, 397, 469, 671, 743, 814, 886, 957, 1029]
+    points_Y = []
+
+    board = [BoardPosition() for i in range(24)]    # temp board of checker positions form photo
+    white = []
+    black = []
+
+    if circles is not None: 
+        circles = np.uint16(np.around(circles))
+        for i in circles[0, :]:
+            # circle center
+            center = (i[0], i[1])
+            
+            #determine color of checker
+            checkerColor = checkerColor(gray, center)
+            if checkerColor > 100:
+                checkerColor = "pWhite"
+                white.append(i)
+            else:
+                checkerColor = "pBlack"
+                black.append(i)
+
+            #   determine the positions of all checkers
+            point = -1
+            if(i[1] > 450):
+                point = checkerPosition(points_X_13_24, 0, len(points_X_13_24) - 1, i[0])
+                if point != -1:
+                    point += 12
+            else:
+                point = checkerPosition(points_X_1_12, 0, len(points_X_1_12) - 1 , i[0])
+
+            if point == -1:
+                return -2 # incocert possition of checkers
+
+            #   Check for mixed checkr on a point
+            if board[point].place(checkerColor) == -1: 
+                return -2 # incocert possition of checkers
+        
+        return checkMoves(board, gameId)
+
+    else:
+        print("here2")
+        return -1
+
+# compare board position and extract moves
+def checkMoves(board, gameId):
+    doubles = False
+    movedChackersInPoint = {}
+    pointsWithChanges = []
+    nubmerOfCheckersMoved = 0 # from all points
+    
+    if games[gameId].dice[0] == games[gameId].dice[1]:
+        doubles = True
+
+    for i in range(24):          
+        checkersMoved = abs(games[gameId].board[i].checkers - board[i].checkers) #checkers moved from the current point
+        
+        #switch checker color but kept number of checkers
+        if games[gameId].board[i].player != board[i].player and board[i].player != None:
+            if games[gameId].board[i].checkers > 2:
+                return -2
+            else:
+                checkersMoved += 1
+            
+        if checkersMoved > 0 or (games[gameId].board[i].player != board[i].player and board[i].player != None):
+            pointsWithChanges.append(i)
+            movedChackersInPoint[i] = checkersMoved
+            nubmerOfCheckersMoved += checkersMoved
+
+            # moved more Checkers than the max allowed from one point
+            if doubles == False and checkersMoved > 2: # normal dice trow
+                return -2
+            elif doubles == True and checkersMoved > 4: # rowed doubles
+                return -2
+            if doubles == False and nubmerOfCheckersMoved > 4: # normal dice trow
+                return -2
+            elif doubles == True and checkersMoved > 4: # rowed doubles
+                return -2
+
+    if nubmerOfCheckersMoved == 0:
+        return -2
+
+    # one checker moved twice 
+    if len(pointsWithChanges) == 2:
+        # check if move is allowed
+        if abs(pointsWithChanges[0] - pointsWithChanges[1]) == (games[gameId].dice[0] + games[gameId].dice[1]):
+            if games[gameId].moveChecker(pointsWithChanges[0], pointsWithChanges[0] + games[gameId].dice[0]) == -1:
+                if games[gameId].moveChecker(pointsWithChanges[0], pointsWithChanges[0] + games[gameId].dice[1]) == -1:
+                    return -2
+                else:
+                    games[gameId].moveChecker(pointsWithChanges[0] + games[gameId].dice[0], pointsWithChanges[1])
+            else:
+                games[gameId].moveChecker(pointsWithChanges[0] + games[gameId].dice[1], pointsWithChanges[1])
+            socketio.emit("moveChecker",  {'oldPos' : "point_"  + pointsWithChanges[0], 'newPos' : "point_"  + pointsWithChanges[1]}, to=gameId)
+            return 0  
+        else:
+            return -2
+    else:
+        if doubles == True:
+            for i in range(4):
+                dice = games[gameId].dice[0]
+                startPoint = pointsWithChanges[0] + dice
+                while (1):
+                    if pointsWithChanges[startPoint] in movedChackersInPoint:
+                        #move checker
+                        games[gameId].moveChecker(pointsWithChanges[startPoint], pointsWithChanges[0])
+                        socketio.emit("moveChecker",  {'oldPos' : "point_"  +pointsWithChanges[0] , 'newPos' : "point_"  + pointsWithChanges[startPoint]}, to=gameId)
+                        # check if all checkers were moved
+                        movedChackersInPoint[startPoint] -= 1
+                        if movedChackersInPoint[startPoint] <= 0:
+                            movedChackersInPoint.pop(startPoint)
+                            pointsWithChanges.remove(pointsWithChanges[startPoint])
+                        # check if all checkers were moved
+                        movedChackersInPoint[pointsWithChanges[0]] -= 1
+                        if movedChackersInPoint[pointsWithChanges[0]] <= 0:
+                            movedChackersInPoint.pop(pointsWithChanges[0])
+                            pointsWithChanges.remove(pointsWithChanges[0])
+                        break
+                    # chck if the middle point is free
+                    elif games[gameId].board[startPoint].player != board[i].player and board[startPoint].player != None:
+                        return -2
+                    else:
+                        startPoint += dice
+                        i += 1
+                    # no possible starting position found
+                    if i >= 4:
+                        return -2
+            return 0
+        else:
+            for i in range(2):
+                dice = games[gameId].dice[0]
+                if games[gameId].dice[0] != 0:
+                    startPoint = pointsWithChanges[0] + games[gameId].dice[0]
+                    if startPoint in movedChackersInPoint:
+                        games[gameId].moveChecker(pointsWithChanges[0], startPoint)
+                    else:
+                        startPoint = pointsWithChanges[0] + games[gameId].dice[1]
+                        if startPoint in movedChackersInPoint:
+                            games[gameId].moveChecker(pointsWithChanges[0], startPoint)
+                        else:
+                            return -2
+                else:
+                    startPoint = pointsWithChanges[0] + games[gameId].dice[1]
+                    if startPoint in movedChackersInPoint:
+                        games[gameId].moveChecker(pointsWithChanges[0], startPoint)
+                    else:
+                        return -2
+                socketio.emit("moveChecker",  {'oldPos' : "point_"  + pointsWithChanges[startPoint], 'newPos' : "point_"  + pointsWithChanges[0]}, to=gameId)
+                # check if all checkers were moved
+                movedChackersInPoint[startPoint] -= 1
+                if movedChackersInPoint[startPoint] <= 0:
+                    movedChackersInPoint.pop(startPoint)
+                    pointsWithChanges.remove(pointsWithChanges[startPoint])
+                movedChackersInPoint[pointsWithChanges[0]] -= 1
+                if movedChackersInPoint[pointsWithChanges[0]] <= 0:
+                    movedChackersInPoint.pop(pointsWithChanges[0])
+                    pointsWithChanges.remove(pointsWithChanges[0])
+            return 0
 
 # ------------------------------------------------------------------------------
 
@@ -522,7 +736,6 @@ def createGame():
     flash("Coucld not connect to the selected device. Try again later","danger")
     return {'result' : "index"}
     
-
 @app.route('/showGame/<id>', methods=['GET', 'POST'])
 @login_required
 def showGame(id):
@@ -548,7 +761,7 @@ def deleteGame(gameId):
 
 @app.route('/ajaxDiceRow/<game_id>', methods = ['GET'])
 def ajaxDiceRow(game_id):
-    print("here----------------------------------------------------------------------")
+    print(game_id)
     if games[game_id].dice[0] == 0 and games[game_id].dice[1] == 0:  
         games[game_id].dice = rowDice()
         if games[game_id].dice[0] == games[game_id].dice[1]:
@@ -560,19 +773,19 @@ def ajaxDiceRow(game_id):
             games[game_id].switchPlayers()
             turnPossible = False
             games[game_id].doubles = False
-        print("Game id = ")
-        print(game_id)
         socketio.emit("diceResult",  {'dice' : games[game_id].dice, 'turnPossible' : turnPossible, 'currPlayer' : games[game_id].playerOnTurn}, to=game_id)
         return {'dice' : games[game_id].dice, 'turnPossible' : turnPossible, 'currPlayer' : games[game_id].playerOnTurn}
     else:
         return {'dice' : games[game_id].dice, 'currPlayer' : games[game_id].playerOnTurn}
-
 
 @app.route('/ajaxMove', methods = ['POST'])
 def ajax_request():
     old_pos_string = request.form['old_pos']
     new_pos_string = request.form['new_pos']
     game_id = request.form['game_id']
+
+    if games[game_id].playerOnTurn != games[game_id].OnlinePlayer:
+        return {'allowed' : False, 'currPlayer' : games[game_id].playerOnTurn}
 
     old_pos = None
     new_pos = None
@@ -602,7 +815,6 @@ def ajax_request():
         allowed = False
     else:
         allowed = True
-
         if result == 1:
             hitt = True
 
@@ -662,7 +874,6 @@ def getGameData():
             output['dice'] = games[gameId].dice
     except:
         pass
-
     return output
 
 @app.route("/confirmGameStart", methods=['GET'])
@@ -687,41 +898,12 @@ def confirmGameStart():
     )
 
 # ------------------------------------------------------------------------------
-
-@app.route('/shortTask')
-def short_running_task():
-  start = datetime.now()
-  return 'Started at {0}, returned at {1}'.format(start, datetime.now())
-
-# a long running tasks that returns after 30s
-@app.route('/longTask')
-def long_running_task():
-  start = datetime.now()
-  sleep(30)
-  return 'Started at {0}, returned at {1}'.format(start, datetime.now())
-
-# ------------------------------------------------------------------------------
-
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if current_user.is_authenticated:
         return render_template("index.html")
     else:
         return render_template("index_for_non_users.html")
-
-def shutdown_server():
-    func = request.environ.get('werkzeug.server.shutdown')
-    if func is None:
-        raise RuntimeError('Not running with the Werkzeug Server')
-    func()
-
-@app.route('/shutdown', methods=['GET'])
-def shutdown():
-    shutdown_server()
-    return 'Server shutting down...'
-
-def processPhotos():
-    return 0
 
 if __name__ == '__main__':
     socketio.run(app)

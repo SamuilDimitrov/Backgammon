@@ -7,10 +7,11 @@ Home
 {% block body %}
 
 <div class="row justify-content-center mt-2">
-    <div class="col-md-4">
-
-        <h3>Hello There</h3>
-        <h4>You need to sign in to do anything!</h4>
+    <div class="col-md-8">
+        <h1>Wellcome to Remote Backgammon</h1>
+        <h3>If you are looking to play soma backgammon this is the place for you!</h3>
+        <p style="margin-top: 10px;"><a class="mt2" href="{{ url_for('login') }}">Log in</a> in to your acount to play</h3>
+        <p style="margin-top: 10px;">Don't have an accout? <a class="mt2" href="{{ url_for('register') }}">Register!</a></p>
     </div>
 </div>
 
