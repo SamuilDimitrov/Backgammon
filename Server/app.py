@@ -436,34 +436,32 @@ def profile():
 def uploadPhoto():
     deviceId = request.args.get('deviceId')
     files = request.files
-    print(files)
     if 'imageFile' not in request.files:
         return 'there is no imageFile in form!'
-    print ("file found")
     file = request.files['imageFile']
     if file:
         filename = file.filename
         name = filename[:len(filename)-4] + "_" + deviceId + filename[len(filename)-4:]
-        print(name)
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], name))
 
     try:
         gameId = list(gameId_device.keys())[list(gameId_device.values()).index(deviceId)]
-        result = processPhoto(name, gameId)
-        if result == -1: #image can not be open
-            print("BAD_IMG")
-            return "BAD_IMG"
-        elif result == -2:
-            print("ILLEGAL_MOVE")
-            return "ILLEGAL_MOVE"
-        print("OK")
-        return "OK"
     except:
         print("NO_GAME_FOUND")
         return "NO_GAME_FOUND"
     
+    result = processPhoto(name, gameId)
+    if result == -1: #image can not be open
+        print("BAD_IMG")
+        return "BAD_IMG"
+    elif result == -2:
+        print("ILLEGAL_MOVE")
+        return "ILLEGAL_MOVE"
+    print("OK")
+    return "OK"
+
 #get the avarege brightness of a checker
-def checkerColor(src1, center): 
+def getcheckerColor(src1, center): 
     x = center[1]
     y = center[0]
     avg = 0
@@ -543,7 +541,7 @@ def processPhoto(filename, gameId):
             center = (i[0], i[1])
             
             #determine color of checker
-            checkerColor = checkerColor(gray, center)
+            checkerColor = getcheckerColor(gray, center)
             if checkerColor > 100:
                 checkerColor = "pWhite"
                 white.append(i)
@@ -566,7 +564,6 @@ def processPhoto(filename, gameId):
             #   Check for mixed checkr on a point
             if board[point].place(checkerColor) == -1: 
                 return -2 # incocert possition of checkers
-        
         return checkMoves(board, gameId)
 
     else:
@@ -844,6 +841,7 @@ def deviceUpdate():
         if connectingDevice.status != "inGame":
             connectingDevice.status = "inGame"
             db_session.commit()
+        print(gameId_device)
         gameId = list(gameId_device.keys())[list(gameId_device.values()).index(deviceId)]
         return jsonify(gameId = gameId)
     except:
